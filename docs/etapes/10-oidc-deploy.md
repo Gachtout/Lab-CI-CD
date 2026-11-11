@@ -1,7 +1,17 @@
 # Étape 10 : OIDC, apply et destroy sur AWS
 
-!!! warning "Non exécuté par l'auteur du lab"
-    Aucune commande de cette étape n'a été lancée contre un compte AWS. Le code Terraform est validé (`terraform validate`) et planifié hors ligne (14 ressources pour le bootstrap, 15 pour `dev`) ; les workflows passent `actionlint`. Les politiques IAM en moindre privilège n'ont **pas** été éprouvées : attends-toi à corriger un ou deux `AccessDenied` au premier `apply`. La section [Dépannage](#depannage) explique comment.
+!!! warning "Vérification statique uniquement"
+    `make check-etape-10` planifie ton bootstrap **hors ligne**, avec de faux identifiants, et lit tes fichiers. Il n'exécute aucune cible `aws-*` et n'agit sur aucun compte.
+
+    | Vérifié par le check | À tester toi-même sur AWS et GitHub |
+    |---|---|
+    | Le bootstrap se planifie et crée le fournisseur d'identité, le bucket d'état protégé, le budget | `terraform apply` du bootstrap réussit sur ton compte |
+    | La politique de confiance compare le sujet strictement et vérifie l'audience (lecture du code) | Un job hors environnement, ou depuis une autre branche, est **refusé** par AWS |
+    | Aucune clé statique dans les workflows ; les jobs AWS sont dans un environnement | L'approbation manuelle bloque réellement l'apply |
+    | Aucune politique n'accorde toutes les actions (lecture du code) | Le rôle de déploiement a **assez** de droits pour l'apply, et pas plus |
+    | Les cibles `aws-apply` et `aws-destroy` exigent une confirmation | `destroy` supprime tout, et le budget t'alerte |
+
+    Le moindre privilège ne se prouve pas en statique : attends-toi à corriger des refus d'accès au premier apply. C'est l'exercice.
 
 ## Objectif
 
@@ -36,14 +46,6 @@ Rien n'est stocké dans GitHub. Il n'y a rien à voler, ni à faire tourner.
 
 **Toute la sécurité tient dans la politique de confiance.** Celle du lab compare le champ `sub` du jeton en **égalité stricte** :
 
-```hcl
-condition {
-  test     = "StringEquals"
-  variable = "token.actions.githubusercontent.com:sub"
-  values   = ["repo:${var.github_repository}:environment:dev"]
-}
-```
-
 L'erreur classique est d'écrire `StringLike` avec `repo:mon-org/*` : n'importe quel dépôt de l'organisation, n'importe quelle branche, n'importe quelle PR peut alors endosser le rôle.
 
 **Deux rôles, deux environnements.**
@@ -57,71 +59,95 @@ Les deux environnements n'acceptent que la branche `main`. Une PR n'obtient donc
 
 **L'état distant.** L'état Terraform contient la description complète de l'infrastructure. Il vit dans un bucket S3 privé, chiffré et versionné. Le verrou est un fichier `.tflock` dans ce bucket (`use_lockfile`), ce qui évite la table DynamoDB des anciennes configurations.
 
-## Ce qu'on fait
+## Ce qui t'est fourni
 
-- `terraform/bootstrap/` : bucket d'état, fournisseur OIDC, les deux rôles, la limite de permissions des rôles applicatifs, une alerte de budget à 1 $. Appliqué **une fois, à la main**, avec un état local : il crée ce dont tout le reste dépend.
-- `deploy.yml` : sur `main`, job `plan-aws` (lecture seule) puis job `apply`, qui attend l'approbation.
-- `destroy.yml` : lancement manuel, il faut taper `destroy`, puis approuver.
-- Cibles `make aws-plan`, `aws-apply`, `aws-destroy`. Les deux dernières refusent de s'exécuter sans `AWS_CONFIRM=oui`.
+- Les cibles `aws-plan`, `aws-apply`, `aws-destroy`, vides.
+- Ton module IAM et ton environnement `dev` de l'étape 6.
 
-Le moindre privilège du rôle de déploiement, en trois mesures :
+## Énoncé
 
-- actions réseau limitées à VPC, sous-réseau et security group, dans une seule région (ni instance, ni NAT Gateway : l'action n'est pas accordée) ;
-- actions S3 et IAM limitées aux ressources dont le nom commence par `devsecops-lab-` ;
-- **limite de permissions** : il ne peut créer un rôle applicatif que si ce rôle porte la politique `devsecops-lab-app-boundary`. Sans cela, un rôle autorisé à créer des rôles peut s'en créer un plus puissant que lui.
+Livrables :
 
-## Bootstrap : les commandes à lancer toi-même
+- `terraform/bootstrap/` : bucket d'état, fournisseur d'identité, rôles, alerte de budget. État local, appliqué à la main.
+- Les workflows `deploy.yml` et `destroy.yml`.
+- Les cibles `make aws-plan`, `make aws-apply`, `make aws-destroy`.
 
-Prérequis : un compte AWS, un utilisateur administrateur configuré en local (`aws configure sso` de préférence), Terraform ≥ 1.10 installé sur ton poste.
+Contraintes :
 
-| # | Commande | Ce qu'elle fait |
-|---|---|---|
-| 1 | `aws sts get-caller-identity` | Vérifie quel compte et quelle identité tu utilises. Ne modifie rien |
-| 2 | `cd terraform/bootstrap && cp terraform.tfvars.example terraform.tfvars` | Crée ton fichier de variables (ignoré par git). Renseigne ton dépôt et ton courriel |
-| 3 | `terraform init` | Télécharge le provider AWS. Ne touche pas au compte |
-| 4 | `terraform plan -out=bootstrap.tfplan` | Affiche les 14 ressources à créer. **Lis-le.** Ne crée rien |
-| 5 | `terraform apply bootstrap.tfplan` | Crée le bucket d'état, le fournisseur OIDC, les deux rôles, la limite de permissions et le budget |
-| 6 | `terraform output` | Affiche les cinq valeurs à reporter dans GitHub |
+1. Le bootstrap se planifie hors ligne et crée un fournisseur d'identité pour l'émetteur de jetons de GitHub Actions.
+2. La politique de confiance des rôles compare le sujet du jeton en égalité stricte, sans joker, et le lie à un environnement GitHub.
+3. L'audience du jeton est vérifiée : seule celle d'AWS STS est acceptée.
+4. Le bucket d'état est versionné, chiffré, et bloque tout accès public.
+5. Une alerte de budget est créée.
+6. Aucune clé d'accès AWS statique n'apparaît dans un workflow : les jobs obtiennent leurs identifiants par fédération d'identité.
+7. Tout job qui obtient des identifiants AWS s'exécute dans un environnement GitHub. La destruction est manuelle et vérifie une confirmation saisie.
+8. Le déploiement ne peut pas être déclenché par une pull request ; en automatique, il ne part que de `main`.
+9. Aucune politique du bootstrap n'accorde toutes les actions.
+10. `make aws-apply` et `make aws-destroy` refusent de s'exécuter sans la variable `AWS_CONFIRM`.
 
-Puis reporte les sorties dans les **variables** du dépôt (ce ne sont pas des secrets : un ARN n'ouvre aucun droit) :
+## Contrat d'interface
+
+Ces noms sont imposés : la vérification en dépend.
+
+| Élément | Valeur imposée |
+|---|---|
+| Bootstrap | `terraform/bootstrap/`, variables `github_repository`, `budget_email`, `offline` |
+| Workflows | `.github/workflows/deploy.yml`, `.github/workflows/destroy.yml` |
+| Cibles `make` | `aws-plan`, `aws-apply`, `aws-destroy` |
+| Confirmation locale | variable d'environnement `AWS_CONFIRM` |
+| Configuration du dépôt | des *variables* GitHub (pas des secrets) pour la région, le bucket d'état et les ARN des rôles |
+
+## Critère de réussite
 
 ```bash
-gh variable set AWS_REGION          --body "$(terraform output -raw region)"
-gh variable set TF_STATE_BUCKET     --body "$(terraform output -raw state_bucket)"
-gh variable set AWS_PLAN_ROLE_ARN   --body "$(terraform output -raw plan_role_arn)"
-gh variable set AWS_DEPLOY_ROLE_ARN --body "$(terraform output -raw deploy_role_arn)"
-gh variable set APP_BOUNDARY_ARN    --body "$(terraform output -raw app_boundary_arn)"
+make check-etape-10
 ```
 
-Conserve `terraform.tfstate` du bootstrap en lieu sûr (il ne contient pas de secret, mais il est nécessaire pour modifier ou détruire le bootstrap).
+Chaque ligne `ECHEC [Cn]` renvoie à la contrainte `n` ci-dessus et donne l'emplacement en cause, jamais la correction. Les journaux détaillés sont dans `reports/checks/`. Teste toujours en local avant de pousser.
 
-Si ton compte possède déjà un fournisseur OIDC pour GitHub, l'étape 5 échouera sur cette ressource : il ne peut en exister qu'un par URL. Importe-le avec `terraform import aws_iam_openid_connect_provider.github <arn>`.
+## Indices
 
-## Comment vérifier
+Ouvre-les dans l'ordre, et seulement après avoir cherché.
 
-1. Fusionne une PR qui touche `terraform/`. Le workflow `deploy` démarre.
-2. Le job `plan-aws` affiche le plan réel dans le résumé de l'exécution.
-3. Le job `apply` passe en attente : **Review deployments**, puis approuve.
-4. Après l'apply : `aws s3 ls | grep devsecops-lab-data` et `aws ec2 describe-vpcs --filters Name=tag:Project,Values=devsecops-lab`.
-5. Dans CloudTrail, cherche l'événement `AssumeRoleWithWebIdentity` : tu y lis le `sub` du jeton et le nom de session `gha-apply-<run_id>`. C'est la piste d'audit qui relie un changement AWS à une exécution GitHub.
-6. Nettoyage : workflow `destroy`, tape `destroy`, approuve.
+??? tip "Indice 1 : par où commencer"
+    - Le bootstrap crée ce dont le reste dépend : il ne peut pas utiliser l'état distant qu'il crée lui-même.
+    - Dans la fédération d'identité, toute la sécurité tient dans la politique de confiance du rôle.
+
+??? tip "Indice 2 : les points qui coincent"
+    - Le jeton de GitHub contient un champ sujet dont la forme dépend du contexte du job (branche, PR, environnement). Lis la documentation « OpenID Connect » de GitHub.
+    - Un rôle pour lire, un rôle pour écrire : deux environnements GitHub, dont un seul exige une approbation.
+    - Un rôle autorisé à créer des rôles peut s'en créer un plus puissant que lui. Cherche « permissions boundary ».
+    - Un job demande un jeton d'identité grâce à un droit spécifique du jeton de workflow.
+
+??? tip "Indice 3 : presque la réponse"
+    - Deux conditions d'égalité dans la politique de confiance : l'audience, et le sujet au format dépôt puis environnement.
+    - L'identifiant du compte peut se déduire de l'ARN du fournisseur d'identité, sans source de données distante : le bootstrap reste planifiable hors ligne.
+    - Restreins les actions du rôle de déploiement par service, par préfixe de nom de ressource, et par région.
+    - L'action officielle d'AWS échange le jeton contre des identifiants ; elle reçoit l'ARN du rôle et la région.
+    - Le backend se configure à l'initialisation par des options, à partir de variables d'environnement.
+    - La cible d'apply commence par tester la variable de confirmation et s'arrête si elle manque.
 
 ## Casse-le volontairement
 
-- **Depuis une branche.** Lance `deploy` par `workflow_dispatch` depuis une autre branche que `main`. Attendu : l'environnement refuse le déploiement, avant toute demande de jeton.
-- **Politique de confiance.** Dans le bootstrap, remplace `environment:dev` par `environment:prod` pour le rôle de déploiement, réapplique, relance `deploy`. Attendu : `Not authorized to perform sts:AssumeRoleWithWebIdentity`. Le jeton est valide, mais il ne dit pas ce que le rôle exige. Remets la valeur d'origine.
-- **Moindre privilège.** Ajoute une ressource `aws_nat_gateway` dans `envs/dev`. La policy `COST-01` la refuse dès la PR. Si tu forces le passage, l'apply échoue quand même : le rôle n'a pas l'action `ec2:CreateNatGateway`. Deux barrières indépendantes.
-- **Verrou.** Lance `deploy` deux fois de suite : le second attend le premier (`concurrency`), et Terraform refuserait de toute façon de prendre un état verrouillé.
+Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles d'un corrigé.
 
-## Dépannage
+1. Lance le déploiement depuis une autre branche que `main`. À quel niveau est-il refusé ?
+2. Change l'environnement attendu dans la politique de confiance, réapplique, relance. Lis le message d'AWS.
+3. Ajoute une NAT Gateway : la policy la refuse en PR. Si tu forçais le passage, que ferait AWS ?
+4. Cherche dans CloudTrail l'événement d'échange de jeton : qu'y lis-tu qui relie AWS à une exécution GitHub ?
 
-Un `AccessDenied` au premier apply est probable : la liste d'actions a été écrite à partir de la documentation, pas d'une exécution.
+## Défends ton choix
 
-1. Lis le message : il nomme l'action refusée (`… is not authorized to perform: s3:PutBucketAcl on resource …`).
-2. Ajoute **cette action seulement** au bon bloc de `terraform/bootstrap/oidc.tf`, sur la ressource la plus étroite possible.
-3. Réapplique le bootstrap, relance le workflow.
+À savoir expliquer à l'oral, sans notes.
 
-Ne cède pas à `"Action": "*"` : c'est précisément l'exercice. Note chaque ajout, c'est de la matière pour la page « Leçons apprises ».
+1. Pourquoi une clé d'accès statique dans les secrets de CI est-elle un mauvais choix ?
+2. Décris l'échange OIDC en quatre étapes. Qui signe quoi, qui vérifie quoi ?
+3. Que se passe-t-il si la condition sur le sujet utilise une comparaison par motif avec un joker ?
+4. Pourquoi deux rôles plutôt qu'un ?
+5. À quoi sert une limite de permissions ? Décris l'élévation de privilèges qu'elle empêche.
+6. Pourquoi le plan d'une PR n'a-t-il pas d'identifiants, alors que celui du déploiement en a ?
+7. Un `AccessDenied` au premier apply : quelle est ta méthode, et quelle est la tentation à refuser ?
+8. Pourquoi les ARN des rôles sont-ils des variables et pas des secrets ?
 
 ## Côté Wiz, en entreprise
 
@@ -133,3 +159,11 @@ Ne cède pas à `"Action": "*"` : c'est précisément l'exercice. Note chaque aj
 | Alerte de budget | Hors périmètre de Wiz |
 
 Le point à retenir pour la mission : Wiz saura dire qu'un rôle de pipeline est trop permissif **une fois qu'il existe**. Le concevoir correctement reste un travail d'ingénierie, celui de cette étape.
+
+## Corrigé
+
+À ouvrir seulement une fois `make check-etape-10` vert et les questions travaillées : [`etape-10-solution`](https://github.com/Gachtout/Lab-CI-CD/tree/etape-10-solution). La version finale de tout le parcours est sur la branche [`solution`](https://github.com/Gachtout/Lab-CI-CD/tree/solution).
+
+Corrections apportées plus tard à ce corrigé :
+
+- Aucune : c'est la dernière version du bootstrap. Les politiques IAM du corrigé n'ont jamais été appliquées sur un compte réel.
