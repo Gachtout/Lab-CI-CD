@@ -1,0 +1,4 @@
+# Référence volontairement invalide, injectée par la vérification de l'étape 6.
+locals {
+  faute_reference = var.variable_qui_n_existe_pas
+}

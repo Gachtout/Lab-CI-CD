@@ -1,0 +1,4 @@
+# Fichier volontairement mal formaté, injecté par la vérification de l'étape 6.
+locals {
+      faute_format="x"
+}
