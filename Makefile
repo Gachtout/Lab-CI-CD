@@ -57,3 +57,20 @@ clean: ## Supprime les rapports et les caches locaux
 .PHONY: lint-workflows
 lint-workflows: | $(REPORTS) ## Vérifie la syntaxe des workflows GitHub Actions (actionlint)
 	$(RUN) $(ACTIONLINT_IMAGE) 2>&1 | tee $(REPORTS)/actionlint.txt
+
+# ----------------------------------------------------------------------------
+# Étape 2 : tests et image Docker
+# ----------------------------------------------------------------------------
+IMAGE          ?= devsecops-lab-app:local
+DOCKER_BUILD   ?= docker build $(NET_FLAGS)
+
+.PHONY: test
+test: ## Lance les tests unitaires de l'application (pytest)
+	$(RUN) -w /src/app -e PYTHONDONTWRITEBYTECODE=1 $(PYTHON_IMAGE) sh -c '\
+	  python -m venv /tmp/venv && \
+	  /tmp/venv/bin/pip install --quiet --disable-pip-version-check -r requirements.txt -r requirements-dev.txt && \
+	  /tmp/venv/bin/python -m pytest -q -p no:cacheprovider tests'
+
+.PHONY: build
+build: ## Construit l'image Docker de l'application
+	$(DOCKER_BUILD) -t $(IMAGE) app
