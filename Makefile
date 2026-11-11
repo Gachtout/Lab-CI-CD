@@ -16,6 +16,7 @@ TRIVY_IMAGE      := ghcr.io/aquasecurity/trivy:0.76.2@sha256:8f6bb947dbc528902e1
 CHECKOV_IMAGE    := ghcr.io/bridgecrewio/checkov:3.4.3@sha256:bfe9d70bb7f044aba49bd99675813445f106dee6072da583f51008cb667f3a63
 TERRAFORM_IMAGE  := $(DOCKERHUB)/hashicorp/terraform:1.17.1@sha256:a5d5a5a892c98f60fcbfa81eac2a40fc19e7b3fa7719bccae10ff6111d22524a
 CONFTEST_IMAGE   := $(DOCKERHUB)/openpolicyagent/conftest:v0.71.1@sha256:0e77cdf7c1fcde035f3c579e4aaa6664ee2a8be5777eaa9af9f520cdd02280c0
+PROWLER_IMAGE    := public.ecr.aws/prowler-cloud/prowler:5.48.0@sha256:18c46f938c19f0409be29a0b39b33ac43187e6d0eabaf6371d7468cc682d875b
 
 # ----------------------------------------------------------------------------
 # Quality gates : les seuils qui font échouer une cible (détail : étape 8).
@@ -252,3 +253,25 @@ aws-apply: aws-check ## [AWS] terraform apply (exige AWS_CONFIRM=oui)
 aws-destroy: aws-check ## [AWS] terraform destroy de l'environnement dev (exige AWS_CONFIRM=oui)
 	@test "$${AWS_CONFIRM:-}" = "oui" || { echo "Refusé : relance avec AWS_CONFIRM=oui pour détruire l'environnement."; exit 1; }
 	$(Q)$(TF_AWS) '$(TF_AWS_INIT) && terraform destroy -input=false -auto-approve -lock-timeout=5m'
+
+# ----------------------------------------------------------------------------
+# Étape 11 : SBOM et audit de posture du compte (CSPM)
+# ----------------------------------------------------------------------------
+.PHONY: sbom
+sbom: image-export | $(REPORTS) ## Inventaire des composants de l'image (SBOM CycloneDX)
+	$(Q)$(TRIVY) image --input /cache/image.tar --format cyclonedx --output $(REPORTS)/sbom.cdx.json
+	@echo "SBOM écrit dans $(REPORTS)/sbom.cdx.json"
+
+.PHONY: sbom-scan
+sbom-scan: ## Recherche de vulnérabilités à partir du SBOM seul, sans l'image
+	$(Q)$(TRIVY) sbom $(REPORTS)/sbom.cdx.json $(TRIVY_GATE)
+
+.PHONY: prowler
+prowler: ## [AWS] Audit de posture du compte en lecture seule (Prowler), rapport dans reports/prowler/
+	@test -n "$${AWS_REGION:-}" || { echo "AWS_REGION est vide"; exit 1; }
+	$(Q)mkdir -p $(REPORTS)/prowler && chmod 777 $(REPORTS)/prowler
+	$(Q)docker run --rm $(NET_FLAGS) \
+	  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION -e AWS_DEFAULT_REGION \
+	  -v "$(CURDIR)/$(REPORTS)/prowler":/home/prowler/output $(PROWLER_IMAGE) \
+	  aws --region $$AWS_REGION --severity critical high --status FAIL \
+	  --output-formats html csv json-ocsf --output-directory /home/prowler/output --ignore-exit-code-3
