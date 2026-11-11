@@ -23,87 +23,94 @@ Refuser une infrastructure dangereuse **avant** qu'elle n'existe, avec deux scan
 - `some rc in input.resource_changes` parcourt le plan.
 - Piège classique : un attribut absent vaut `null` dans le plan, et `not x` est faux quand `x` vaut `null`. On compare donc explicitement : `x != true`.
 
-## Ce qu'on fait
+## Ce qui t'est fourni
 
-| Fichier | Rôle |
+- Les images `CHECKOV_IMAGE` et `CONFTEST_IMAGE`.
+- Les cibles `iac-trivy`, `iac-checkov`, `iac`, `policy-test`, `policy`, vides.
+- Des plans de référence dans `checks/fixtures/` : un plan conforme et quatre plans fautifs. Lis-les, ils montrent la structure d'un plan.
+
+## Énoncé
+
+Livrables :
+
+- Les cibles `make iac-trivy`, `make iac-checkov`, `make iac`, `make policy-test`, `make policy`.
+- Des policies Rego dans `policies/`, avec leurs tests unitaires.
+- Un job `iac` dans `pr-security.yml`, et l'appel des policies dans `terraform-plan.yml`.
+- Si nécessaire, des exceptions justifiées (voir l'étape 8 pour leur format).
+
+Contraintes :
+
+1. `make iac-trivy` réussit sur ton code et échoue sur un bucket exposable publiquement (constats `HIGH` et `CRITICAL`).
+2. `make iac-checkov` réussit sur ton code et échoue sur le même bucket.
+3. Tes policies acceptent un plan conforme : celui de `checks/fixtures/plan-sain.json`, et le tien.
+4. Tes policies refusent un bucket dont l'un des quatre blocages d'accès public n'est pas actif.
+5. Tes policies refusent une règle d'entrée ouverte à tout Internet, en IPv4 comme en IPv6.
+6. Tes policies refusent une ressource taggable à laquelle il manque l'un des tags `Project`, `Environment`, `Owner`, `ManagedBy`.
+7. Tes policies refusent la création d'une ressource payante (au minimum une NAT Gateway).
+8. `make policy-test` exécute au moins quatre tests unitaires de policies, tous réussis.
+9. `make policy` calcule le plan, applique les policies à ce plan, et échoue si l'une d'elles le refuse.
+10. Le job `iac` lance les deux scanners ; le workflow `terraform-plan` appelle `make policy`.
+
+## Contrat d'interface
+
+Ces noms sont imposés : la vérification en dépend.
+
+| Élément | Valeur imposée |
 |---|---|
-| `make iac-trivy` | Trivy config sur Terraform et le `Dockerfile` : bloque sur `HIGH` et `CRITICAL` |
-| `make iac-checkov` | Checkov : bloque sur tout contrôle en échec non explicitement écarté |
-| `policies/s3.rego` | `S3-01`, `S3-02` : les quatre blocages d'accès public à `true`, sur chaque bucket |
-| `policies/reseau.rego` | `NET-01` : aucune entrée depuis `0.0.0.0/0` ou `::/0` |
-| `policies/tags.rego` | `TAG-01` : tags `Project`, `Environment`, `Owner`, `ManagedBy` |
-| `policies/cout.rego` | `COST-01` : pas de NAT Gateway, EC2, RDS, KMS… dans ce lab |
-| `policies/policies_test.rego` | 13 tests unitaires des policies |
-| `make policy` | Plan hors ligne, tests des policies, puis application au plan |
+| Policies | dossier `policies/`, règles `deny`, évaluées avec tous les espaces de noms |
+| Cibles `make` | `iac-trivy`, `iac-checkov`, `iac`, `policy-test`, `policy` |
+| Entrée des policies | `reports/tfplan.json` |
+| Nom du job | `iac` |
 
-Le premier passage des scanners sur le code sain a remonté 1 constat `HIGH` côté Trivy et 6 échecs côté Checkov, tous discutables pour un lab gratuit (clé KMS, journaux d'accès, flow logs…). Ils sont traités comme des **exceptions justifiées et datées**, pas ignorés en silence : voir l'étape 8.
-
-## Comment vérifier
+## Critère de réussite
 
 ```bash
-make iac && make policy
+make check-etape-07
 ```
 
-```text
-Passed checks: 70, Failed checks: 0, Skipped checks: 4
+Chaque ligne `ECHEC [Cn]` renvoie à la contrainte `n` ci-dessus et donne l'emplacement en cause, jamais la correction. Les journaux détaillés sont dans `reports/checks/`. Teste toujours en local avant de pousser.
 
-13 tests, 13 passed, 0 warnings, 0 failures, 0 exceptions, 0 skipped
+## Indices
 
-7 tests, 7 passed, 0 warnings, 0 failures, 0 exceptions
-```
+Ouvre-les dans l'ordre, et seulement après avoir cherché.
+
+??? tip "Indice 1 : par où commencer"
+    - Deux familles d'outils : ceux qui lisent le code, ceux qui lisent le plan. Demande-toi ce que chacun peut voir.
+    - Ouvre `checks/fixtures/plan-sain.json` : une policy sur le plan parcourt la liste `resource_changes`.
+
+??? tip "Indice 2 : les points qui coincent"
+    - En Rego, une règle `deny` ajoute un message quand toutes ses lignes sont vraies.
+    - Un attribut absent vaut `null` dans le plan, et la négation d'une valeur `null` ne se comporte pas comme tu l'attends : compare explicitement.
+    - Ignore les ressources que le plan supprime ou se contente de lire.
+    - Conftest a une sous-commande pour les tests unitaires : une règle de test fournit une entrée fictive avec le mot-clé `with`.
+    - Si un scanner signale un point que tu assumes (une clé KMS payante, par exemple), ne baisse pas le seuil : trace une exception.
+
+??? tip "Indice 3 : presque la réponse"
+    - Factorise dans un paquet commun l'ensemble des ressources créées ou modifiées, puis écris une policy par sujet.
+    - Tags : la différence entre l'ensemble des tags obligatoires et l'ensemble des clés de `tags_all`.
+    - Réseau : il existe trois façons de déclarer une règle d'entrée dans le provider AWS ; les plans de référence utilisent la plus récente.
+    - Coût : une table associant un type de ressource à la raison de son interdiction.
+    - Checkov se configure par un fichier à la racine ; Trivy accepte un fichier d'exceptions avec une date d'expiration par entrée.
 
 ## Casse-le volontairement
 
-Applique les deux changements de la future PR « bad » :
+Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles d'un corrigé.
 
-- `terraform/envs/dev/variables.tf` : `app_ingress_cidrs` passe à `["0.0.0.0/0"]` ;
-- `terraform/envs/dev/main.tf` : `block_public_access = false`.
+1. Ouvre le security group à tout Internet via la variable de ton environnement, puis lance les deux scanners et les policies. Qui le voit, qui ne le voit pas, et pourquoi ?
+2. Ajoute une NAT Gateway à l'environnement et lance `make policy`.
+3. Supprime un cas `null` de tes policies et regarde quel test unitaire échoue.
 
-### Trivy config
+## Défends ton choix
 
-```text
-Failures: 4 (HIGH: 4, CRITICAL: 0)
-AWS-0086 (HIGH): Public access block does not block public ACLs
-AWS-0087 (HIGH): Public access block does not block public policies
-AWS-0091 (HIGH): Public access block does not ignore public ACLs
-AWS-0093 (HIGH): Public access block does not restrict public buckets
-make: *** [Makefile:183: iac-trivy] Error 1
-```
+À savoir expliquer à l'oral, sans notes.
 
-### Checkov
-
-```text
-Check: CKV_AWS_53: "Ensure S3 bucket has block public ACLS enabled"
-Check: CKV_AWS_54: "Ensure S3 bucket has block public policy enabled"
-Check: CKV_AWS_55: "Ensure S3 bucket has ignore public ACLs enabled"
-Check: CKV_AWS_56: "Ensure S3 bucket has 'restrict_public_buckets' enabled"
-Check: CKV2_AWS_6: "Ensure that S3 bucket has a Public Access block"
-Passed checks: 65, Failed checks: 5, Skipped checks: 4
-make: *** [Makefile:188: iac-checkov] Error 1
-```
-
-### Policies sur le plan
-
-```text
-FAIL - reports/tfplan.json - lab.s3 - [S3-01] module.data.aws_s3_bucket_public_access_block.this : block_public_acls doit valoir true (accès public bloqué)
-FAIL - reports/tfplan.json - lab.s3 - [S3-01] … : block_public_policy doit valoir true (accès public bloqué)
-FAIL - reports/tfplan.json - lab.s3 - [S3-01] … : ignore_public_acls doit valoir true (accès public bloqué)
-FAIL - reports/tfplan.json - lab.s3 - [S3-01] … : restrict_public_buckets doit valoir true (accès public bloqué)
-FAIL - reports/tfplan.json - lab.reseau - [NET-01] module.app_sg.aws_vpc_security_group_ingress_rule.https["0.0.0.0/0"] : entrée ouverte à tout Internet (0.0.0.0/0)
-9 tests, 4 passed, 0 warnings, 5 failures, 0 exceptions
-make: *** [Makefile:200: policy] Error 1
-```
-
-### Le résultat à retenir
-
-Relis les trois sorties : **ni Trivy ni Checkov n'ont signalé le security group ouvert.** Le bucket public, oui ; la règle `0.0.0.0/0`, non. La plage vient d'une variable, consommée par un `for_each` dans un module : l'analyse statique n'a pas reconstitué la valeur. Seule la policy appliquée au plan l'a vue, parce que le plan contient la valeur finale.
-
-Ce n'est pas un défaut de configuration, c'est une limite de méthode. Deux leçons :
-
-- « Le scanner est vert » ne veut pas dire « c'est sûr ». Il faut savoir ce que l'outil est capable de voir.
-- Pour les règles qui comptent vraiment, contrôler le **plan** est plus fiable que contrôler le code.
-
-Dernier essai : ajoute une ressource `aws_nat_gateway` dans `envs/dev/main.tf` et relance `make policy` pour voir `COST-01`. Annule avec `git checkout terraform/`.
+1. Quelle différence entre analyser le code Terraform et analyser le plan ? Donne un défaut que seule la seconde voit.
+2. Pourquoi écrire des policies maison alors que les scanners ont des centaines de règles ?
+3. Pourquoi tester unitairement une policy ?
+4. Explique le piège de la valeur `null` en Rego.
+5. Un scanner est vert. Qu'est-ce que cela prouve, et qu'est-ce que cela ne prouve pas ?
+6. Deux scanners IaC : redondance utile ou bruit ? Comment décides-tu ?
+7. Comment transposerais-tu ces policies dans un outil commercial comme Wiz ?
 
 ## Côté Wiz, en entreprise
 
@@ -115,3 +122,11 @@ Dernier essai : ajoute une ressource `aws_nat_gateway` dans `envs/dev/main.tf` e
 | Tests `conftest verify` | Pas d'équivalent intégré : garder des tests unitaires de ses règles reste une bonne pratique |
 
 Le Rego appris ici est donc directement réutilisable. La structure d'entrée diffère (Wiz expose sa propre représentation de la ressource), la logique `deny si…` est la même.
+
+## Corrigé
+
+À ouvrir seulement une fois `make check-etape-07` vert et les questions travaillées : [`etape-07-solution`](https://github.com/Gachtout/Lab-CI-CD/tree/etape-07-solution). La version finale de tout le parcours est sur la branche [`solution`](https://github.com/Gachtout/Lab-CI-CD/tree/solution).
+
+Corrections apportées plus tard à ce corrigé :
+
+- Aucune correction ultérieure sur les policies. Les exceptions du bootstrap sont ajoutées à l'étape 10.

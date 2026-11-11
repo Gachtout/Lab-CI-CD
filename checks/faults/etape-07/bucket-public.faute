@@ -1,0 +1,13 @@
+# Bucket volontairement exposable, injecté par la vérification de l'étape 7.
+resource "aws_s3_bucket" "faute" {
+  bucket_prefix = "faute-"
+}
+
+resource "aws_s3_bucket_public_access_block" "faute" {
+  bucket = aws_s3_bucket.faute.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}

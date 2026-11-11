@@ -1,0 +1,121 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.17.1",
+  "resource_changes": [
+    {
+      "address": "aws_vpc.reseau",
+      "mode": "managed",
+      "type": "aws_vpc",
+      "name": "reseau",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "cidr_block": "10.20.0.0/16",
+          "tags": null,
+          "tags_all": {
+            "Project": "lab",
+            "Environment": "dev",
+            "Owner": "equipe",
+            "ManagedBy": "terraform"
+          }
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.donnees",
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "donnees",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "bucket_prefix": "lab-",
+          "tags": null,
+          "tags_all": {
+            "Project": "lab",
+            "Environment": "dev",
+            "Owner": "equipe",
+            "ManagedBy": "terraform"
+          }
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket_public_access_block.donnees",
+      "mode": "managed",
+      "type": "aws_s3_bucket_public_access_block",
+      "name": "donnees",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "block_public_acls": true,
+          "block_public_policy": false,
+          "ignore_public_acls": true,
+          "restrict_public_buckets": false
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.appli",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "appli",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "description": "appli",
+          "tags": null,
+          "tags_all": {
+            "Project": "lab",
+            "Environment": "dev",
+            "Owner": "equipe",
+            "ManagedBy": "terraform"
+          }
+        }
+      }
+    },
+    {
+      "address": "aws_vpc_security_group_ingress_rule.https",
+      "mode": "managed",
+      "type": "aws_vpc_security_group_ingress_rule",
+      "name": "https",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "cidr_ipv4": "10.20.0.0/16",
+          "cidr_ipv6": null,
+          "from_port": 443,
+          "to_port": 443,
+          "ip_protocol": "tcp",
+          "tags": null,
+          "tags_all": {
+            "Project": "lab",
+            "Environment": "dev",
+            "Owner": "equipe",
+            "ManagedBy": "terraform"
+          }
+        }
+      }
+    }
+  ]
+}
