@@ -24,3 +24,9 @@ repos:
         language: system
         files: \.tf$
         pass_filenames: false
+      - id: trivy-config
+        name: trivy config (Terraform, Dockerfile)
+        entry: make iac-trivy
+        language: system
+        files: (\.tf$|Dockerfile$)
+        pass_filenames: false

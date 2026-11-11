@@ -1,0 +1,11 @@
+# Exceptions Trivy. Chaque entrée porte une justification et une date d'expiration :
+# passé cette date, Trivy cesse d'ignorer le constat et le pipeline redevient rouge.
+# Processus complet : docs/etapes/08-quality-gates.md
+misconfigurations:
+  - id: AWS-0132
+    paths:
+      - terraform/modules/s3/main.tf
+    expired_at: 2027-05-31
+    statement: >-
+      Chiffrement SSE-S3 (AES-256) accepté pour ce lab : une clé KMS dédiée coûte 1 $ par mois
+      et sort du périmètre gratuit. En production, utiliser une clé gérée par le client.

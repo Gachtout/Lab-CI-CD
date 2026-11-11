@@ -2,6 +2,7 @@
 # Tout ce module est gratuit ; une NAT Gateway coûterait environ 30 € par mois.
 
 resource "aws_vpc" "this" {
+  #checkov:skip=CKV2_AWS_11:Flow logs non activés, CloudWatch Logs sort du périmètre gratuit - expire le 2027-05-31
   cidr_block           = var.cidr
   enable_dns_support   = true
   enable_dns_hostnames = true

@@ -1,6 +1,8 @@
 # Bucket privé : accès public bloqué, chiffrement au repos, versioning, TLS obligatoire.
 
 resource "aws_s3_bucket" "this" {
+  #checkov:skip=CKV_AWS_145:SSE-S3 accepté pour le lab, une clé KMS est payante - expire le 2027-05-31
+  #checkov:skip=CKV_AWS_18:Pas de bucket de journaux d'accès dans ce lab - expire le 2027-05-31
   bucket_prefix = "${var.name}-"
   force_destroy = var.force_destroy
 

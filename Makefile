@@ -165,3 +165,30 @@ tf-lock: | .cache/terraform/plugins ## Régénère .terraform.lock.hcl (à lance
 	$(Q)$(TERRAFORM) --entrypoint sh $(TERRAFORM_IMAGE) -c '\
 	  cd $(TF_ENV) && terraform init -backend=false -input=false >/dev/null && \
 	  terraform providers lock -platform=linux_amd64 -platform=linux_arm64'
+
+# ----------------------------------------------------------------------------
+# Étape 7 : scan IaC et policies maison
+# ----------------------------------------------------------------------------
+.PHONY: iac-trivy
+iac-trivy: | $(REPORTS) ## Mauvaises configurations Terraform et Dockerfile (Trivy config)
+	$(Q)$(TRIVY) config --skip-dirs .cache --skip-dirs $(REPORTS) --ignorefile .trivyignore.yaml \
+	  --format sarif --output $(REPORTS)/trivy-config.sarif .
+	$(Q)$(TRIVY) config --skip-dirs .cache --skip-dirs $(REPORTS) --ignorefile .trivyignore.yaml \
+	  --severity $(TRIVY_SEVERITY) --exit-code 1 .
+
+.PHONY: iac-checkov
+iac-checkov: | $(REPORTS) ## Mauvaises configurations Terraform et Dockerfile (Checkov)
+	$(Q)$(RUN) $(CHECKOV_IMAGE) --config-file .checkov.yaml \
+	  --output cli --output sarif --output-file-path console,$(REPORTS)/checkov.sarif
+
+.PHONY: iac
+iac: iac-trivy iac-checkov ## Les deux scanners IaC
+
+.PHONY: policy-test
+policy-test: ## Tests unitaires des policies Rego (conftest verify)
+	$(Q)$(RUN) $(CONFTEST_IMAGE) verify --policy policies
+
+.PHONY: policy
+policy: plan policy-test ## Applique les policies maison au plan Terraform (Conftest / OPA)
+	$(Q)$(RUN) $(CONFTEST_IMAGE) test $(REPORTS)/tfplan.json --policy policies --all-namespaces --no-color \
+	  | tee $(REPORTS)/policy.txt

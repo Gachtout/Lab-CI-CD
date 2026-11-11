@@ -1,4 +1,4 @@
-# Sur chaque pull request : format, validation et plan Terraform.
+# Sur chaque pull request : format, validation, plan Terraform et policies maison.
 # Le plan est fait hors ligne (aucun identifiant AWS) : il fonctionne aussi pour une PR venant d'un fork.
 name: terraform-plan
 
@@ -7,6 +7,11 @@ on:
     branches: [main]
 
 permissions: {}
+
+# bash explicite : active `set -eo pipefail`. Sans cela, `commande | tee` masquerait un échec.
+defaults:
+  run:
+    shell: bash
 
 concurrency:
   group: terraform-plan-${{ github.ref }}
@@ -28,8 +33,8 @@ jobs:
         run: make tf-fmt
       - name: Validation
         run: make tf-validate
-      - name: Plan hors ligne
-        run: make plan
+      - name: Plan hors ligne et policies maison (Conftest)
+        run: make policy
       - name: Résumer le plan
         if: always()
         run: |
@@ -38,6 +43,12 @@ jobs:
             echo
             echo '```text'
             grep -E 'will be|must be|Plan:|No changes' reports/tfplan.txt || echo 'Plan indisponible : voir les logs du job.'
+            echo '```'
+            echo
+            echo '### Policies maison'
+            echo
+            echo '```text'
+            grep -E '^(FAIL|WARN) |tests, ' reports/policy.txt || echo 'Résultat indisponible : voir les logs du job.'
             echo '```'
           } > reports/plan-comment.md
           cat reports/plan-comment.md >> "$GITHUB_STEP_SUMMARY"

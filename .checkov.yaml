@@ -1,0 +1,17 @@
+# Configuration Checkov du lab.
+directory:
+  - terraform
+  - app
+framework:
+  - terraform
+  - dockerfile
+compact: true
+quiet: true
+download-external-modules: false
+
+# Contrôles écartés pour TOUT le dépôt : ils ne s'appliquent pas à un lab mono-région.
+# Les exceptions qui portent sur UNE ressource sont en commentaire dans le code Terraform,
+# avec une date d'expiration vérifiée par scripts/check-exceptions.sh.
+skip-check:
+  - CKV_AWS_144 # réplication S3 inter-régions : pas de besoin de continuité pour ce lab
+  - CKV2_AWS_62 # notifications d'événements S3 : aucun consommateur dans ce lab
