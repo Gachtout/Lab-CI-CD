@@ -1,0 +1,39 @@
+# Contrôles de sécurité sur chaque pull request et sur main.
+# Chaque job appelle une cible du Makefile : le même outil, la même image, le même seuil qu'en local.
+name: pr-security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Aucun droit par défaut : chaque job déclare le strict nécessaire.
+permissions: {}
+
+# Un nouveau push sur la même PR annule l'exécution précédente.
+concurrency:
+  group: pr-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflow-lint:
+    name: workflow-lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Vérifier les workflows (actionlint)
+        run: make lint-workflows
+      - name: Publier le rapport
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: actionlint
+          path: reports/actionlint.txt
+          retention-days: 7

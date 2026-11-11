@@ -1,0 +1,24 @@
+# Rapports et caches générés par make
+reports/
+.cache/
+site/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.db
+
+# Terraform : jamais d'état, de plan ni de variables locales dans git
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan*
+*.auto.tfvars
+backend_override.tf
+crash.log
+
+# Secrets locaux
+.env
