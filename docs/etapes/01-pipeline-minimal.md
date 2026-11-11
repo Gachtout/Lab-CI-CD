@@ -22,67 +22,98 @@ Deux conséquences pratiques :
 - Le runner part d'un disque vide : il faut d'abord récupérer le code (`actions/checkout`).
 - Le code de sortie de chaque commande décide de tout. `0` : l'étape est verte. Autre chose : l'étape, puis le job, sont rouges. **Tous les blocages de ce lab reposent sur ce mécanisme.**
 
-## Ce qu'on fait
+## Ce qui t'est fourni
 
-1. Un `Makefile` dont chaque cible lance un outil dans une image Docker épinglée par digest.
-2. Un workflow `pr-security.yml` avec un seul job, `workflow-lint`, qui appelle `make lint-workflows` puis publie le rapport en artifact.
+- Le `Makefile` avec sa plomberie Docker : la variable `RUN` et l'image `ACTIONLINT_IMAGE`, épinglée par digest.
+- Une cible `lint-workflows` vide, qui échoue avec « non implémenté ».
 
-Le workflow ne contient donc presque aucune logique : il appelle `make`. C'est ce qui garantit que le local et la CI font la même chose.
+## Énoncé
 
-```yaml title=".github/workflows/pr-security.yml (extrait)"
-permissions: {}            # aucun droit par défaut
+Livrables :
 
-jobs:
-  workflow-lint:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read       # lire le code, rien d'autre
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - run: make lint-workflows
-      - if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-```
+- La cible `make lint-workflows` : elle lance actionlint, dans son image Docker, sur les workflows du dépôt.
+- Le workflow `.github/workflows/pr-security.yml`, avec un seul job.
 
-Trois choix à savoir justifier :
+Contraintes :
 
-- **Action épinglée par SHA de commit**, pas par tag. Un tag (`v7`) peut être déplacé vers un autre commit par quiconque contrôle le dépôt de l'action ; un SHA ne peut pas.
-- **`permissions: {}`** au niveau du workflow. Le jeton `GITHUB_TOKEN` donné au runner n'a alors aucun droit, sauf ceux que chaque job redemande.
-- **`persist-credentials: false`** : le jeton n'est pas laissé dans la configuration git du runner après le checkout.
+1. Le workflow se déclenche sur les pull requests visant `main`, sur les push sur `main`, et à la demande. Rien d'autre.
+2. Le jeton du workflow n'a aucun droit par défaut. Chaque job déclare les siens ; `workflow-lint` n'a que la lecture du code.
+3. Toute action tierce est épinglée par SHA de commit complet.
+4. Le jeton ne reste pas dans la configuration git du runner après la récupération du code.
+5. Le job n'installe aucun outil : il appelle `make lint-workflows`.
+6. Le rapport est publié en artifact même si le lint échoue, et conservé 7 jours.
+7. Chaque job a une durée maximale explicite.
+8. Un nouveau push sur la même référence annule l'exécution précédente.
+9. `make lint-workflows` écrit sa sortie dans `reports/actionlint.txt` et échoue si actionlint trouve une erreur, bien que la sortie passe par un tube.
 
-## Comment vérifier
+## Contrat d'interface
 
-En local :
+Ces noms sont imposés : la vérification en dépend.
+
+| Élément | Valeur imposée |
+|---|---|
+| Fichier du workflow | `.github/workflows/pr-security.yml` |
+| Nom du job | `workflow-lint` |
+| Cible `make` | `lint-workflows` |
+| Rapport | `reports/actionlint.txt` |
+
+## Critère de réussite
 
 ```bash
-make lint-workflows
+make check-etape-01
 ```
 
-Sortie attendue : aucune ligne d'erreur, code de sortie `0`, fichier `reports/actionlint.txt` vide.
+Chaque ligne `ECHEC [Cn]` renvoie à la contrainte `n` ci-dessus et donne l'emplacement en cause, jamais la correction. Les journaux détaillés sont dans `reports/checks/`. Teste toujours en local avant de pousser.
 
-Sur GitHub (après le [point de contrôle 1](../reference/checkpoints.md)) : onglet **Actions**, workflow `pr-security`, job `workflow-lint` vert, et un artifact `actionlint` téléchargeable en bas de la page d'exécution.
+## Indices
+
+Ouvre-les dans l'ordre, et seulement après avoir cherché.
+
+??? tip "Indice 1 : par où commencer"
+    - Un workflow a quatre blocs de premier niveau qui comptent ici : ce qui le déclenche, les droits du jeton, la concurrence, les jobs. Repère la clé de chacun dans la référence « workflow syntax » de GitHub.
+    - Pour la cible `make`, regarde comment la variable `RUN` est construite : elle monte le dépôt dans le conteneur.
+
+??? tip "Indice 2 : les points qui coincent"
+    - Les droits se règlent à deux niveaux, le workflow et le job. Le niveau job remplace le niveau workflow.
+    - Pour trouver le SHA d'un tag sans faire confiance à une page web : `git ls-remote --tags` sur le dépôt de l'action.
+    - Une étape ne s'exécute pas si une étape précédente a échoué, sauf condition explicite.
+    - Les options de shell déclarées en tête du `Makefile` répondent à la contrainte 9.
+
+??? tip "Indice 3 : presque la réponse"
+    - Droits : un objet vide au niveau du workflow, puis la lecture du contenu au niveau du job.
+    - L'action de récupération du code a une option qui concerne la persistance des identifiants.
+    - La condition qui force une étape à s'exécuter quoi qu'il arrive est une fonction d'expression sans argument.
+    - La concurrence se définit par un nom de groupe, construit à partir de la référence git, et un booléen d'annulation.
+    - La cible `make` tient en une ligne : la variable `RUN`, l'image, un tube vers `tee`.
 
 ## Casse-le volontairement
 
-Dans `pr-security.yml`, remplace `ubuntu-24.04` par `ubuntu-99.99`, puis relance `make lint-workflows`.
+Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles d'un corrigé.
 
-```text
-.github/workflows/pr-security.yml:23:14: label "ubuntu-99.99" is unknown. available labels are
-"windows-latest", …, "ubuntu-24.04", … [runner-label]
-make: *** [Makefile:67: lint-workflows] Error 1
-```
+1. Remplace le système du runner par une version qui n'existe pas, puis relance `make lint-workflows`. Que renvoie `make` ?
+2. Dans une étape `run`, affiche directement le titre de la pull request avec une expression. Que dit actionlint, et pourquoi est-ce une faille ?
+3. Retire l'option `pipefail` du `Makefile` et refais le premier essai. Qu'est-ce qui change dans le code de sortie ? Remets l'option.
 
-`make` renvoie un code non nul : dans la CI, le job serait rouge. Deuxième essai, plus instructif : remplace la commande par `echo ${{ github.event.pull_request.title }}`.
+## Défends ton choix
 
-```text
-.github/workflows/pr-security.yml:32:23: "github.event.pull_request.title" is potentially untrusted.
-avoid using it directly in inline scripts. instead, pass it through an environment variable. [expression]
-```
+À savoir expliquer à l'oral, sans notes.
 
-actionlint a détecté une **injection de script** : le titre d'une PR est écrit par un inconnu et serait collé tel quel dans une commande shell. Annule tes modifications avec `git checkout .github/workflows/pr-security.yml`.
+1. Pourquoi épingler une action par SHA plutôt que par numéro de version ? Cite un incident réel où un tag a été déplacé.
+2. Sans la ligne qui vide les droits, que peut faire le jeton par défaut, et qu'en ferait une action compromise ?
+3. Deux jobs partagent-ils leur système de fichiers ? Comment un fichier passe-t-il de l'un à l'autre ?
+4. Quelle différence de risque entre les déclencheurs `pull_request` et `pull_request_target` ?
+5. Pourquoi appeler `make` plutôt qu'une action du marketplace qui ferait le lint ? Donne un avantage et un inconvénient.
+6. Que se passe-t-il, côté sécurité, si un contributeur externe ouvre une PR qui modifie ce workflow ?
+7. Pourquoi un tube peut-il rendre vert un contrôle qui a échoué ?
 
 ## Côté Wiz, en entreprise
 
 Wiz n'exécute pas ton pipeline : il s'y **branche**. Wiz CLI est un binaire qu'on appelle depuis un job, comme on appelle ici `make`. Tout ce qui est appris à cette étape (events, permissions du jeton, code de sortie, artifacts) est donc le socle sur lequel l'intégration Wiz reposera, quel que soit l'outil de CI de l'entreprise.
+
+## Corrigé
+
+À ouvrir seulement une fois `make check-etape-01` vert et les questions travaillées : [`etape-01-solution`](https://github.com/Gachtout/Lab-CI-CD/tree/etape-01-solution). La version finale de tout le parcours est sur la branche [`solution`](https://github.com/Gachtout/Lab-CI-CD/tree/solution).
+
+Corrections apportées plus tard à ce corrigé :
+
+- Le corrigé de cette étape ne force pas encore `bash` comme shell des étapes `run` : c'est ajouté à l'étape 7.

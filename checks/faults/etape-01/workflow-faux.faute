@@ -1,0 +1,8 @@
+# Workflow volontairement faux, injecté par la vérification de l'étape 1.
+name: faux
+on: push
+jobs:
+  faux:
+    runs-on: ubuntu-99.99
+    steps:
+      - run: echo ${{ github.event.pull_request.title }}
