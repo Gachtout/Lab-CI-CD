@@ -28,6 +28,7 @@ module "data" {
 module "app_role" {
   source = "../../modules/iam"
 
-  name       = "${var.project}-app"
-  bucket_arn = module.data.bucket_arn
+  name                     = "${var.project}-app"
+  bucket_arn               = module.data.bucket_arn
+  permissions_boundary_arn = var.app_permissions_boundary_arn
 }

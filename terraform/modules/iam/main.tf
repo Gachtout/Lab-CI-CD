@@ -18,6 +18,9 @@ resource "aws_iam_role" "app" {
   description        = "Rôle de l'application ${var.name} : lecture du bucket de données"
   assume_role_policy = data.aws_iam_policy_document.assume.json
 
+  # Plafond imposé par le bootstrap : la politique du rôle ne peut pas le dépasser.
+  permissions_boundary = var.permissions_boundary_arn
+
   tags = { Name = var.name }
 }
 

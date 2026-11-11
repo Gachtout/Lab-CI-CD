@@ -27,3 +27,9 @@ variable "app_ingress_cidrs" {
   type        = list(string)
   default     = ["10.20.0.0/16"]
 }
+
+variable "app_permissions_boundary_arn" {
+  description = "Limite de permissions des rôles applicatifs, fournie par le bootstrap"
+  type        = string
+  default     = null
+}

@@ -13,3 +13,9 @@ variable "trusted_service" {
   type        = string
   default     = "ec2.amazonaws.com"
 }
+
+variable "permissions_boundary_arn" {
+  description = "Limite de permissions à attacher au rôle (exigée par le rôle de déploiement)"
+  type        = string
+  default     = null
+}

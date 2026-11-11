@@ -1,0 +1,3 @@
+# Copie ce fichier en terraform.tfvars (ignoré par git) et renseigne tes valeurs.
+github_repository = "ton-compte/devsecops-lab"
+budget_email      = "toi@example.org"

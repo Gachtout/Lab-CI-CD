@@ -145,8 +145,11 @@ tf-fmt: ## Vérifie le formatage Terraform (terraform fmt -check)
 
 .PHONY: tf-validate
 tf-validate: ## Valide la syntaxe et la cohérence du code Terraform
-	$(Q)$(TERRAFORM) --entrypoint sh $(TERRAFORM_IMAGE) -c '\
-	  cd $(TF_ENV) && terraform init -backend=false -input=false >/dev/null && terraform validate'
+	$(Q)for dir in $(TF_ENV) terraform/bootstrap; do \
+	  echo "== $$dir"; \
+	  $(TERRAFORM) -e TF_DATA_DIR=/cache/terraform/data-$$(basename $$dir) --entrypoint sh $(TERRAFORM_IMAGE) -c \
+	    "cd $$dir && terraform init -backend=false -input=false >/dev/null && terraform validate" || exit 1; \
+	done
 
 # Plan hors ligne : backend local jetable et faux identifiants, dans une copie temporaire.
 # Rien n'est créé, aucun appel AWS n'est émis ; le plan est exporté en JSON pour les policies.
@@ -163,9 +166,11 @@ plan: | $(REPORTS) ## terraform plan sans compte AWS, exporté dans reports/tfpl
 
 .PHONY: tf-lock
 tf-lock: ## Régénère .terraform.lock.hcl (à lancer après un changement de version de provider)
-	$(Q)$(TERRAFORM) --entrypoint sh $(TERRAFORM_IMAGE) -c '\
-	  cd $(TF_ENV) && terraform init -backend=false -input=false >/dev/null && \
-	  terraform providers lock -platform=linux_amd64 -platform=linux_arm64'
+	$(Q)for dir in $(TF_ENV) terraform/bootstrap; do \
+	  $(TERRAFORM) -e TF_DATA_DIR=/cache/terraform/data-$$(basename $$dir) --entrypoint sh $(TERRAFORM_IMAGE) -c \
+	    "cd $$dir && terraform init -backend=false -input=false >/dev/null && \
+	     terraform providers lock -platform=linux_amd64 -platform=linux_arm64" || exit 1; \
+	done
 
 # ----------------------------------------------------------------------------
 # Étape 7 : scan IaC et policies maison
@@ -216,3 +221,34 @@ demo-good: ## Démo : le dépôt sain passe tous les gates
 .PHONY: demo-bad
 demo-bad: ## Démo : les failles injectées sont toutes bloquées
 	$(Q)scripts/demo.sh bad
+
+# ----------------------------------------------------------------------------
+# Étape 10 : AWS réel. Ces cibles appellent AWS avec les identifiants de l'environnement.
+# Elles sont faites pour les workflows deploy et destroy (identifiants OIDC d'une heure).
+# ----------------------------------------------------------------------------
+TF_AWS := $(TERRAFORM) -e TF_DATA_DIR=/cache/terraform/data-aws \
+  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION -e AWS_DEFAULT_REGION \
+  -e TF_VAR_region -e TF_VAR_app_permissions_boundary_arn -e TF_STATE_BUCKET \
+  --entrypoint sh $(TERRAFORM_IMAGE) -c
+TF_AWS_INIT := cd $(TF_ENV) && terraform init -input=false -reconfigure \
+  -backend-config="bucket=$$TF_STATE_BUCKET" -backend-config="region=$$AWS_REGION" >/dev/null
+
+.PHONY: aws-check
+aws-check:
+	@test -n "$${TF_STATE_BUCKET:-}" || { echo "TF_STATE_BUCKET est vide : fais d'abord le bootstrap (docs/reference/bootstrap-aws.md)"; exit 1; }
+	@test -n "$${AWS_REGION:-}" || { echo "AWS_REGION est vide"; exit 1; }
+
+.PHONY: aws-plan
+aws-plan: aws-check | $(REPORTS) ## [AWS] terraform plan contre le vrai compte, en lecture seule
+	$(Q)$(TF_AWS) '{ $(TF_AWS_INIT) && terraform plan -input=false -lock=false -no-color; } > /src/$(REPORTS)/aws-plan.txt 2>&1; \
+	  rc=$$?; cat /src/$(REPORTS)/aws-plan.txt; exit $$rc'
+
+.PHONY: aws-apply
+aws-apply: aws-check ## [AWS] terraform apply (exige AWS_CONFIRM=oui)
+	@test "$${AWS_CONFIRM:-}" = "oui" || { echo "Refusé : relance avec AWS_CONFIRM=oui pour modifier le compte AWS."; exit 1; }
+	$(Q)$(TF_AWS) '$(TF_AWS_INIT) && terraform apply -input=false -auto-approve -lock-timeout=5m'
+
+.PHONY: aws-destroy
+aws-destroy: aws-check ## [AWS] terraform destroy de l'environnement dev (exige AWS_CONFIRM=oui)
+	@test "$${AWS_CONFIRM:-}" = "oui" || { echo "Refusé : relance avec AWS_CONFIRM=oui pour détruire l'environnement."; exit 1; }
+	$(Q)$(TF_AWS) '$(TF_AWS_INIT) && terraform destroy -input=false -auto-approve -lock-timeout=5m'

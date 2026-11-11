@@ -5,6 +5,7 @@ misconfigurations:
   - id: AWS-0132
     paths:
       - terraform/modules/s3/main.tf
+      - terraform/bootstrap/state.tf
     expired_at: 2027-05-31
     statement: >-
       Chiffrement SSE-S3 (AES-256) accepté pour ce lab : une clé KMS dédiée coûte 1 $ par mois

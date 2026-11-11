@@ -2,7 +2,7 @@
 # Couche 3 du blocage : applique la configuration GitHub du dépôt, de façon rejouable.
 #   1. secret scanning + push protection
 #   2. ruleset "main-protegee" (.github/rulesets/main.json)
-#   3. environnement "dev" avec approbation manuelle (utilisé par deploy.yml et destroy.yml)
+#   3. environnements "dev-plan" et "dev" (approbation manuelle), limités à la branche main
 # Prérequis : gh CLI authentifié avec les droits d'administration du dépôt.
 # Usage : scripts/setup-github.sh [owner/repo]
 set -euo pipefail
@@ -25,13 +25,23 @@ else
   echo "    ruleset créé"
 fi
 
-echo "3/3 Environnement dev avec approbation manuelle"
+echo "3/3 Environnements dev-plan (lecture seule) et dev (approbation manuelle)"
 user_id=$(gh api user --jq .id)
+# Les deux environnements ne se déploient que depuis main : une branche de PR ne peut pas obtenir d'identifiants AWS.
+gh api --method PUT "repos/${repo}/environments/dev-plan" --silent --input - <<JSON
+{
+  "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true }
+}
+JSON
 gh api --method PUT "repos/${repo}/environments/dev" --silent --input - <<JSON
 {
   "reviewers": [{ "type": "User", "id": ${user_id} }],
-  "deployment_branch_policy": { "protected_branches": true, "custom_branch_policies": false }
+  "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true }
 }
 JSON
+for env in dev-plan dev; do
+  gh api --method POST "repos/${repo}/environments/${env}/deployment-branch-policies" --silent \
+    -f name=main -f type=branch 2>/dev/null || echo "    ${env} : règle de branche main déjà présente"
+done
 
 echo "Terminé. Vérifie : https://github.com/${repo}/settings/rules"
