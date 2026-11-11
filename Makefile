@@ -92,3 +92,20 @@ secrets: | $(REPORTS) ## Cherche des secrets dans tout l'historique git (Gitleak
 .PHONY: secrets-staged
 secrets-staged: ## Cherche des secrets dans les fichiers indexés (utilisé par le hook pre-commit)
 	$(Q)$(GITLEAKS) git --pre-commit --staged .
+
+# ----------------------------------------------------------------------------
+# Étape 4 : SAST (ton code) et SCA (tes dépendances)
+# ----------------------------------------------------------------------------
+SEMGREP := $(RUN) -e SEMGREP_SEND_METRICS=off -e SEMGREP_ENABLE_VERSION_CHECK=0 $(SEMGREP_IMAGE) semgrep scan \
+  --config p/python --config p/flask --config .semgrep/ --quiet
+TRIVY := $(RUN) -e TRIVY_CACHE_DIR=/src/.cache/trivy -e TRIVY_NO_PROGRESS=true $(TRIVY_IMAGE)
+TRIVY_GATE := --severity $(TRIVY_SEVERITY) --ignore-unfixed --exit-code 1
+
+.PHONY: sast
+sast: | $(REPORTS) ## Analyse statique du code (Semgrep) : bloque sur la sévérité ERROR
+	$(Q)$(SEMGREP) --sarif-output $(REPORTS)/semgrep.sarif --text --error --severity $(SEMGREP_SEVERITY) app
+
+.PHONY: sca
+sca: | $(REPORTS) ## Dépendances vulnérables (Trivy fs) : bloque sur HIGH/CRITICAL avec correctif
+	$(Q)$(TRIVY) fs --scanners vuln --format sarif --output $(REPORTS)/trivy-sca.sarif app
+	$(Q)$(TRIVY) fs --scanners vuln $(TRIVY_GATE) app
