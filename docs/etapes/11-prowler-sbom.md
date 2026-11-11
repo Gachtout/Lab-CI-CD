@@ -1,5 +1,8 @@
 # Étape 11 (optionnelle) : SBOM et audit du compte avec Prowler
 
+!!! note "Ce qui est vérifié"
+    `make check-etape-11` exécute réellement `make sbom` et `make sbom-scan`. Il **n'exécute pas** `make prowler` : il lit seulement la commande que la cible lancerait. L'audit du compte est à lancer toi-même, avec des identifiants en lecture seule.
+
 ## Objectif
 
 Sortir du pipeline : savoir ce qui a été livré (SBOM) et contrôler ce qui existe réellement dans le compte cloud (CSPM).
@@ -19,55 +22,82 @@ Tous les contrôles précédents portent sur une **intention** : du code, un pla
 | Voit ce qui est créé à la main | Non | Oui |
 | Peut bloquer | Oui | Non : il constate |
 
-## Ce qu'on fait
+## Ce qui t'est fourni
 
-- `make sbom` : inventaire CycloneDX de l'image, dans `reports/sbom.cdx.json`.
-- `make sbom-scan` : recherche de vulnérabilités à partir du seul SBOM.
-- Job `sbom` : sur `main`, le SBOM est conservé 90 jours en artifact, nommé d'après le commit.
-- `make prowler` : audit du compte AWS en lecture seule, constats `critical` et `high` en échec, rapports HTML, CSV et OCSF dans `reports/prowler/`.
+- La cible d'export d'image que tu as écrite à l'étape 5.
+- Les cibles `sbom`, `sbom-scan`, `prowler`, vides.
 
-## Comment vérifier
+## Énoncé
 
-```bash
-make build sbom
-```
+Livrables :
 
-```text
-SBOM écrit dans reports/sbom.cdx.json
-format CycloneDX 1.7 | composants 96
-   openssl  3.5.7-1~deb13u3   pkg:deb/debian/openssl@3.5.7-1~deb13u3?arch=amd64…
-   gunicorn 27.0.0            pkg:pypi/gunicorn@27.0.0
-```
+- Les cibles `make sbom`, `make sbom-scan`, `make prowler`, et la variable `PROWLER_IMAGE`.
+- Un job `sbom` dans `pr-security.yml`.
 
-96 composants pour une application qui en déclare deux. Le champ `purl` est l'identifiant universel que les bases de vulnérabilités savent lire.
+Contraintes :
 
-```bash
-make sbom-scan
-```
+1. `make sbom` produit l'inventaire de l'image au format CycloneDX dans `reports/sbom.cdx.json`.
+2. `make sbom-scan` cherche les vulnérabilités à partir de l'inventaire seul, avec le même seuil que les autres contrôles : il réussit sur ton image et échoue sur l'inventaire d'une image vulnérable.
+3. L'image de Prowler est épinglée par digest.
+4. Le job `sbom` ne s'exécute pas sur les pull requests, appelle `make sbom`, et conserve l'inventaire au moins 30 jours.
 
-```text
-│ reports/sbom.cdx.json (debian 13.7) │   debian   │        0        │
-```
+## Contrat d'interface
 
-Même verdict que le scan d'image, obtenu sans l'image.
+Ces noms sont imposés : la vérification en dépend.
 
-### Prowler
+| Élément | Valeur imposée |
+|---|---|
+| Cibles `make` | `sbom`, `sbom-scan`, `prowler` |
+| Inventaire | `reports/sbom.cdx.json` |
+| Image analysée | celle que désigne `IMAGE` |
+| Variable d'image | `PROWLER_IMAGE` |
+| Nom du job | `sbom` |
+| Rapports Prowler | `reports/prowler/` |
 
-!!! warning "Non exécuté par l'auteur du lab"
-    La commande et ses options ont été vérifiées contre l'aide de Prowler 5.48.0, pas contre un compte AWS.
-
-Avec des identifiants en lecture seule dans ton terminal (par exemple la politique gérée `SecurityAudit`) :
+## Critère de réussite
 
 ```bash
-AWS_REGION=eu-west-3 make prowler
+make check-etape-11
 ```
 
-Ouvre ensuite le rapport HTML de `reports/prowler/`. Sur un compte neuf, attends-toi à des constats qui n'ont rien à voir avec ce lab : MFA du compte racine, CloudTrail, politique de mots de passe. C'est le but : le CSPM regarde tout le compte, pas seulement ce que Terraform a créé.
+Chaque ligne `ECHEC [Cn]` renvoie à la contrainte `n` ci-dessus et donne l'emplacement en cause, jamais la correction. Les journaux détaillés sont dans `reports/checks/`. Teste toujours en local avant de pousser.
+
+## Indices
+
+Ouvre-les dans l'ordre, et seulement après avoir cherché.
+
+??? tip "Indice 1 : par où commencer"
+    - Trivy sait produire un inventaire, et sait aussi en lire un.
+    - Prowler est un outil en ligne de commande, distribué en image : commence par son aide.
+
+??? tip "Indice 2 : les points qui coincent"
+    - Le format de sortie de Trivy se choisit par une option ; CycloneDX en fait partie.
+    - Le digest d'une image se relève après l'avoir téléchargée, comme à l'étape 2.
+    - Une condition de job peut porter sur le nom de l'événement déclencheur.
+
+??? tip "Indice 3 : presque la réponse"
+    - `make sbom` réutilise l'archive exportée à l'étape 5 et change seulement le format de sortie.
+    - `make sbom-scan` : la sous-commande de Trivy dédiée aux inventaires, suivie de tes options de seuil.
+    - Pour Prowler : transmets les identifiants AWS par l'environnement, limite la région et les sévérités, et monte un dossier de sortie accessible en écriture à l'utilisateur du conteneur.
+    - L'artifact du job porte le SHA du commit dans son nom, pour retrouver l'inventaire d'une livraison.
 
 ## Casse-le volontairement
 
-- **Dérive.** Après un `apply`, crée à la console un security group ouvert en SSH à `0.0.0.0/0` dans le VPC du lab. Aucun contrôle du pipeline ne le voit : il n'est pas dans le code. Relance `make prowler` : il apparaît. Relance le workflow `deploy` : Terraform ne le signale pas non plus, car il ne gère pas cette ressource. Supprime-la.
-- **SBOM dans le temps.** Garde le `sbom.cdx.json` d'aujourd'hui et relance `make sbom-scan` dans quelques semaines : des vulnérabilités apparaîtront sans que l'image ait changé.
+Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles d'un corrigé.
+
+1. Compte les composants de l'inventaire. Combien en déclares-tu dans `requirements.txt` ?
+2. Garde l'inventaire d'aujourd'hui et relance `make sbom-scan` dans quelques semaines.
+3. Après un apply, crée à la console un security group ouvert en SSH. Quel contrôle du pipeline le voit ? Et Prowler ?
+
+## Défends ton choix
+
+À savoir expliquer à l'oral, sans notes.
+
+1. À quoi sert un SBOM le jour où une nouvelle vulnérabilité critique est publiée ?
+2. Quelle différence entre scan IaC et CSPM ? Lequel peut bloquer ?
+3. Pourquoi le pipeline ne voit-il pas une ressource créée à la console ?
+4. Quels droits donnes-tu à un outil d'audit de compte, et pourquoi pas plus ?
+5. Qu'apporte un graphe de sécurité qu'une liste de constats n'apporte pas ?
 
 ## Côté Wiz, en entreprise
 
@@ -79,3 +109,11 @@ Ouvre ensuite le rapport HTML de `reports/prowler/`. Sur un compte neuf, attends
 | Aucun lien entre le code et le compte | Rapprochement d'une ressource cloud avec le dépôt et la ligne de code qui l'ont créée |
 
 C'est ici que l'écart avec les outils gratuits est le plus grand. Voir la page [Limites](../reference/limites.md).
+
+## Corrigé
+
+À ouvrir seulement une fois `make check-etape-11` vert et les questions travaillées : [`etape-11-solution`](https://github.com/Gachtout/Lab-CI-CD/tree/etape-11-solution). La version finale de tout le parcours est sur la branche [`solution`](https://github.com/Gachtout/Lab-CI-CD/tree/solution).
+
+Corrections apportées plus tard à ce corrigé :
+
+- Aucune.
