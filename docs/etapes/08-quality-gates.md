@@ -1,4 +1,4 @@
-# Étape 8 : quality gates, exceptions et démo rouge / vert
+# Étape 8 : quality gates, exceptions et verdict
 
 ## Objectif
 
@@ -12,144 +12,94 @@ Un scanner produit des constats. Un constat ne bloque rien tant qu'on n'a pas r�
 2. **Par quel mécanisme ?** Le code de sortie. Un gate est une commande qui renvoie `0` ou autre chose, rien de plus.
 3. **Que fait-on des cas légitimes ?** Il y en a toujours. Sans procédure d'exception, les gens contournent le contrôle en entier. Une exception saine a un **périmètre** (quelle règle, quelle ressource), une **justification** et une **date de fin**. Sans date, elle devient permanente et plus personne ne sait pourquoi elle existe.
 
-## Les seuils de ce lab
+## Ce qui t'est fourni
 
-| Contrôle | Bloque si… | Réglage |
-|---|---|---|
-| Secrets | Un secret est trouvé, toujours | Gitleaks, aucun seuil |
-| SAST | Constat de sévérité `ERROR` | `SEMGREP_SEVERITY` dans le `Makefile` |
-| Dépendances, image | `HIGH` ou `CRITICAL` **avec correctif disponible** | `TRIVY_SEVERITY`, `--ignore-unfixed` |
-| Configuration de l'image, IaC (Trivy) | `HIGH` ou `CRITICAL` | `TRIVY_SEVERITY` |
-| IaC (Checkov) | Tout contrôle en échec non écarté | `.checkov.yaml` |
-| Policies maison | Toute règle `deny` | `policies/*.rego` |
-| Exceptions | Une exception sans date, sans justification, ou expirée | `scripts/check-exceptions.sh` |
+- `scripts/check-exceptions.sh` : vérifie le format et l'expiration des exceptions. Lis-le pour connaître le format attendu.
+- `scripts/scan-all.sh` : lance tous les contrôles sans s'arrêter au premier échec et écrit `reports/gates.json`.
+- `scripts/summary.py` : construit `reports/summary.md` et renvoie le verdict.
+- `scripts/pr-comment.sh` : publie ou met à jour un commentaire de PR.
+- Les cibles `exceptions`, `scan`, `summary`, vides.
 
-Les rapports SARIF envoyés à Code Scanning utilisent le même filtre que le gate : ce qui est affiché est ce qui bloque.
+## Énoncé
 
-## Les exceptions
+Livrables :
 
-Deux niveaux, comme dans un outil commercial.
+- Les cibles `make exceptions`, `make scan`, `make summary`.
+- Les jobs `exceptions` et `security-gate` dans `pr-security.yml`.
+- La publication de la synthèse en commentaire de PR : c'est entièrement à ta charge (droits, condition, données non fiables).
 
-**Écarter une règle pour tout le dépôt** (elle ne s'applique pas au contexte) : `.checkov.yaml`.
+Contraintes :
 
-```yaml
-skip-check:
-  - CKV_AWS_144 # réplication S3 inter-régions : pas de besoin de continuité pour ce lab
-```
+1. `make exceptions` réussit sur ton dépôt, et un job `exceptions` l'appelle.
+2. `make exceptions` échoue si une exception n'a pas de date d'expiration, ou si elle a expiré.
+3. Les seuils par défaut sont ceux du lab : vulnérabilités `HIGH` et `CRITICAL` avec correctif disponible, SAST à `ERROR`.
+4. Le job `security-gate` s'exécute même quand un contrôle a échoué.
+5. Le job `security-gate` dépend de tous les contrôles : `workflow-lint`, `build-test`, `secrets`, `sast`, `sca`, `image`, `iac`, `exceptions`.
+6. `make summary` reçoit le résultat des jobs par la variable d'environnement `NEEDS_JSON` et échoue si un seul résultat n'est pas un succès, y compris « sauté ».
+7. `make scan` lance tous les contrôles en local, ne s'arrête pas au premier échec, et échoue si l'un d'eux échoue.
+8. Seul le job `security-gate` peut écrire sur les pull requests, et il ne commente que les PR venant du dépôt lui-même.
+9. Aucune donnée non fiable de la pull request (titre, description, nom de branche) n'est insérée dans un script.
 
-**Accepter un constat sur une ressource précise**, avec une date de fin : en commentaire dans le code pour Checkov, dans `.trivyignore.yaml` pour Trivy.
+## Contrat d'interface
 
-```hcl
-#checkov:skip=CKV_AWS_145:SSE-S3 accepté pour le lab, une clé KMS est payante - expire le 2027-05-31
-```
+Ces noms sont imposés : la vérification en dépend.
 
-```yaml
-misconfigurations:
-  - id: AWS-0132
-    paths: [terraform/modules/s3/main.tf]
-    expired_at: 2027-05-31
-    statement: Chiffrement SSE-S3 accepté pour ce lab…
-```
+| Élément | Valeur imposée |
+|---|---|
+| Cibles `make` | `exceptions`, `scan`, `summary` |
+| Variable d'entrée du verdict | `NEEDS_JSON` (le contexte `needs` du job, en JSON) |
+| Rapports | `reports/gates.json`, `reports/summary.md` |
+| Noms des jobs | `exceptions`, `security-gate` |
+| Format d'une exception Checkov | voir l'en-tête de `scripts/check-exceptions.sh` |
 
-Trivy applique `expired_at` lui-même. Checkov n'a pas de notion d'expiration : `make exceptions` la vérifie.
-
-## Le job `security-gate`
-
-Le workflow a maintenant neuf jobs. Exiger neuf statuts dans la protection de branche serait fragile : chaque renommage casserait la règle. Un job final, `security-gate`, dépend de tous les autres et échoue si l'un d'eux n'est pas en `success`. Il publie aussi la synthèse en commentaire de PR.
-
-```yaml
-security-gate:
-  if: always()                       # s'exécute même si un job précédent a échoué
-  needs: [workflow-lint, build-test, secrets, sast, sca, image, iac, exceptions]
-```
-
-Sans `if: always()`, un job dont un prérequis échoue est **sauté**, et un statut sauté n'est pas un échec aux yeux de la protection de branche. C'est pour cela que le script traite tout résultat autre que `success` comme bloquant.
-
-## Comment vérifier : la démo
+## Critère de réussite
 
 ```bash
-make demo-good
+make check-etape-08
 ```
 
-```text
-==> Synthèse
-  PASSE  tests
-  PASSE  secrets
-  PASSE  sast
-  PASSE  sca
-  PASSE  image
-  PASSE  iac-trivy
-  PASSE  iac-checkov
-  PASSE  policy
-  PASSE  exceptions
-Démo good : tous les contrôles passent, la fusion serait autorisée.
-```
+Chaque ligne `ECHEC [Cn]` renvoie à la contrainte `n` ci-dessus et donne l'emplacement en cause, jamais la correction. Les journaux détaillés sont dans `reports/checks/`. Teste toujours en local avant de pousser.
 
-```bash
-make demo-bad
-```
+## Indices
 
-Le script copie le dépôt, y applique `demo/bad.patch` (injection SQL, secret en dur, dépendances vulnérables, image en fin de vie et en root, security group ouvert, bucket public) et ajoute un secret factice.
+Ouvre-les dans l'ordre, et seulement après avoir cherché.
 
-```text
-==> Synthèse
-  BLOQUE tests
-  BLOQUE secrets
-  BLOQUE sast
-  BLOQUE sca
-  BLOQUE image
-  BLOQUE iac-trivy
-  BLOQUE iac-checkov
-  BLOQUE policy
-  PASSE  exceptions
-==> Vérification de la démo
-  attendu BLOQUE, obtenu BLOQUE : tests
-  …
-Démo bad : chaque faille injectée est bloquée, la fusion serait refusée.
-```
+??? tip "Indice 1 : par où commencer"
+    - Un job dont un prérequis échoue est sauté. Demande-toi ce que la protection de branche pense d'un statut sauté.
+    - Les trois scripts fournis font le travail ; ton rôle est de les brancher et de leur passer les bonnes entrées.
 
-Le détail de chaque constat bloquant est dans `reports/demo-bad/logs/`. `make demo-bad` renvoie `0` quand tout est bloqué comme attendu : c'est un **test des contrôles eux-mêmes**, rejoué dans la CI par le job `gates-selftest`. Un gate qui cesserait de détecter sa faille de référence ferait échouer ce job.
+??? tip "Indice 2 : les points qui coincent"
+    - Une expression GitHub Actions convertit un contexte en JSON ; une variable d'environnement d'étape la transmet à la commande.
+    - La variable doit encore traverser `docker run` pour atteindre le script.
+    - Le jeton d'une PR venant d'un fork est en lecture seule : une condition doit écarter ce cas avant de commenter.
+    - Une valeur écrite par un inconnu ne doit jamais être collée dans une commande shell : passe par l'environnement.
 
-Avec les caches chauds, chaque démo prend une trentaine de secondes. Le premier lancement télécharge les images et la base de vulnérabilités : compte plusieurs minutes.
+??? tip "Indice 3 : presque la réponse"
+    - Le job final combine une condition « toujours » et la liste de ses prérequis.
+    - Les artifacts des autres jobs se récupèrent en une étape, par motif de nom, avant de construire la synthèse.
+    - Pour reconnaître une PR interne, compare le nom complet du dépôt source de la PR à celui du dépôt courant.
+    - `scripts/pr-comment.sh` attend trois variables d'environnement, dont le numéro de la PR.
+    - Le droit d'écrire sur les pull requests se déclare au niveau du seul job qui commente.
 
 ## Casse-le volontairement
 
-### Une exception qui expire
+Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles d'un corrigé.
 
-```bash
-TODAY=2027-06-01 make exceptions
-```
+1. Lance `make exceptions` en te plaçant dans le futur (le script accepte une date du jour en variable d'environnement).
+2. Retire la date d'une exception. Puis fais expirer une entrée du fichier d'exceptions de Trivy et relance le scan IaC.
+3. Retire la condition « toujours » du job final : que devient son statut quand un contrôle échoue ?
 
-```text
-ERREUR  terraform/modules/s3/main.tf:4 : CKV_AWS_145 a expiré le 2027-05-31
-ERREUR  .trivyignore.yaml : une exception a expiré le 2027-05-31
-```
+## Défends ton choix
 
-Dans `.trivyignore.yaml`, mets `expired_at: 2026-01-01`, puis `make iac-trivy` : le constat réapparaît.
+À savoir expliquer à l'oral, sans notes.
 
-```text
-Failures: 1 (HIGH: 1, CRITICAL: 0)
-AWS-0132 (HIGH): Bucket does not encrypt data with a customer managed key.
-```
-
-### Une exception sans date
-
-Retire ` - expire le 2027-05-31` d'un commentaire `checkov:skip`, puis `make exceptions`.
-
-```text
-ERREUR  terraform/modules/vpc/main.tf:5 : exception sans justification ou sans date (format : ID:raison - expire le AAAA-MM-JJ)
-```
-
-### Un seuil trop laxiste
-
-Remplace `app/requirements.txt` par les versions vulnérables de l'étape 4, puis compare :
-
-```bash
-make sca                           # bloque : 3 CVE HIGH
-make sca TRIVY_SEVERITY=CRITICAL   # passe : aucune n'est CRITICAL
-```
-
-Les mêmes dépendances, le même scanner, deux verdicts opposés. Le seuil est une décision de risque, pas un détail technique. Annule avec `git checkout app/`.
+1. Qu'est-ce qui distingue un seuil utile d'un seuil décoratif ou insupportable ?
+2. Pourquoi une exception doit-elle avoir une date de fin ?
+3. Pourquoi un seul statut agrégé plutôt que neuf statuts requis ?
+4. Pourquoi un job sauté doit-il compter comme un échec ?
+5. Le titre d'une PR est une donnée non fiable. Décris l'attaque si on l'insère dans un script.
+6. Pourquoi ne pas donner le droit de commenter à tous les jobs ?
+7. Tes seuils sont dans le dépôt : une PR peut les baisser. Quelles parades ?
 
 ## Côté Wiz, en entreprise
 
@@ -162,3 +112,11 @@ Les mêmes dépendances, le même scanner, deux verdicts opposés. Le seuil est 
 | `security-gate` | Inchangé : le job qui appelle `wizcli` devient un statut requis |
 
 Différence d'organisation importante : avec Wiz, c'est l'équipe sécurité qui tient les seuils, pas le développeur qui édite un fichier dans sa propre PR. Dans ce lab, une PR peut modifier le `Makefile` pour baisser un seuil. L'étape 9 traite ce point avec les fichiers protégés (`CODEOWNERS`).
+
+## Corrigé
+
+À ouvrir seulement une fois `make check-etape-08` vert et les questions travaillées : [`etape-08-solution`](https://github.com/Gachtout/Lab-CI-CD/tree/etape-08-solution). La version finale de tout le parcours est sur la branche [`solution`](https://github.com/Gachtout/Lab-CI-CD/tree/solution).
+
+Corrections apportées plus tard à ce corrigé :
+
+- Le corrigé contient aussi une démonstration (`make demo-good`, `make demo-bad`) et un job `gates-selftest` : ils ne font pas partie de l'exercice, `make check-etape-XX` joue ce rôle.
