@@ -3,10 +3,18 @@ FROM public.ecr.aws/docker/library/python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
+# Le digest fige aussi les failles connues de l'image de base : on applique les
+# correctifs de sécurité publiés depuis sa construction.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# pip ne sert qu'à l'installation : on le retire ensuite, avec les bibliothèques qu'il embarque.
+RUN pip install --no-cache-dir -r requirements.txt \
+ && pip uninstall --yes pip
 
 COPY app.py .
 

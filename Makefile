@@ -109,3 +109,20 @@ sast: | $(REPORTS) ## Analyse statique du code (Semgrep) : bloque sur la sévér
 sca: | $(REPORTS) ## Dépendances vulnérables (Trivy fs) : bloque sur HIGH/CRITICAL avec correctif
 	$(Q)$(TRIVY) fs --scanners vuln --format sarif --output $(REPORTS)/trivy-sca.sarif app
 	$(Q)$(TRIVY) fs --scanners vuln $(TRIVY_GATE) app
+
+# ----------------------------------------------------------------------------
+# Étape 5 : image Docker
+# ----------------------------------------------------------------------------
+IMAGE_TAR := .cache/image.tar
+
+# L'image est exportée en archive : Trivy n'a pas besoin d'accéder au socket Docker.
+$(IMAGE_TAR): FORCE
+	$(Q)mkdir -p .cache && docker save $(IMAGE) -o $(IMAGE_TAR)
+FORCE:
+
+.PHONY: image-scan
+image-scan: $(IMAGE_TAR) | $(REPORTS) ## Scanne l'image (paquets OS, dépendances, secrets, configuration)
+	$(Q)$(TRIVY) image --input $(IMAGE_TAR) --scanners vuln,secret --image-config-scanners misconfig,secret \
+	  --format sarif --output $(REPORTS)/trivy-image.sarif
+	$(Q)$(TRIVY) image --input $(IMAGE_TAR) --scanners vuln,secret --image-config-scanners misconfig,secret \
+	  $(TRIVY_GATE)
