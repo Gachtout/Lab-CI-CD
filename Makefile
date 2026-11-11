@@ -31,12 +31,16 @@ DOCKER_NET  ?=
 CA_BUNDLE   ?=
 DOCKER_USER ?= $(shell id -u):$(shell id -g)
 
+# Cache partagé (base Trivy, providers Terraform, archive d'image), hors de l'arbre git.
+CACHE ?= $(CURDIR)/.cache
+$(shell mkdir -p "$(CACHE)/trivy" "$(CACHE)/terraform/plugins")
+
 CA_FLAGS := $(if $(CA_BUNDLE),-v "$(CA_BUNDLE)":/etc/ssl/lab-ca.pem:ro \
   -e SSL_CERT_FILE=/etc/ssl/lab-ca.pem -e REQUESTS_CA_BUNDLE=/etc/ssl/lab-ca.pem -e PIP_CERT=/etc/ssl/lab-ca.pem)
 NET_FLAGS := $(if $(DOCKER_NET),--network $(DOCKER_NET))
 RUN := docker run --rm $(NET_FLAGS) --user $(DOCKER_USER) -e HOME=/tmp \
   -e HTTPS_PROXY -e https_proxy -e NO_PROXY -e no_proxy $(CA_FLAGS) \
-  -v "$(CURDIR)":/src -w /src
+  -v "$(CURDIR)":/src -v "$(CACHE)":/cache -w /src
 
 REPORTS := reports
 
@@ -52,7 +56,7 @@ $(REPORTS):
 
 .PHONY: clean
 clean: ## Supprime les rapports et les caches locaux
-	rm -rf $(REPORTS) .cache
+	rm -rf $(REPORTS) "$(CACHE)"
 
 # ----------------------------------------------------------------------------
 # Étape 1 : pipeline minimal
@@ -98,7 +102,8 @@ secrets-staged: ## Cherche des secrets dans les fichiers indexés (utilisé par 
 # ----------------------------------------------------------------------------
 SEMGREP := $(RUN) -e SEMGREP_SEND_METRICS=off -e SEMGREP_ENABLE_VERSION_CHECK=0 $(SEMGREP_IMAGE) semgrep scan \
   --config p/python --config p/flask --config .semgrep/ --quiet
-TRIVY := $(RUN) -e TRIVY_CACHE_DIR=/src/.cache/trivy -e TRIVY_NO_PROGRESS=true $(TRIVY_IMAGE)
+TRIVY := $(RUN) -e TRIVY_CACHE_DIR=/cache/trivy -e TRIVY_NO_PROGRESS=true $(TRIVY_IMAGE)
+# Les rapports SARIF utilisent le même filtre que le gate : ce qui est affiché est ce qui bloque.
 TRIVY_GATE := --severity $(TRIVY_SEVERITY) --ignore-unfixed --exit-code 1
 
 .PHONY: sast
@@ -107,24 +112,23 @@ sast: | $(REPORTS) ## Analyse statique du code (Semgrep) : bloque sur la sévér
 
 .PHONY: sca
 sca: | $(REPORTS) ## Dépendances vulnérables (Trivy fs) : bloque sur HIGH/CRITICAL avec correctif
-	$(Q)$(TRIVY) fs --scanners vuln --format sarif --output $(REPORTS)/trivy-sca.sarif app
+	$(Q)$(TRIVY) fs --scanners vuln --severity $(TRIVY_SEVERITY) --ignore-unfixed \
+	  --format sarif --output $(REPORTS)/trivy-sca.sarif app
 	$(Q)$(TRIVY) fs --scanners vuln $(TRIVY_GATE) app
 
 # ----------------------------------------------------------------------------
 # Étape 5 : image Docker
 # ----------------------------------------------------------------------------
-IMAGE_TAR := .cache/image.tar
-
 # L'image est exportée en archive : Trivy n'a pas besoin d'accéder au socket Docker.
-$(IMAGE_TAR): FORCE
-	$(Q)mkdir -p .cache && docker save $(IMAGE) -o $(IMAGE_TAR)
-FORCE:
+.PHONY: image-export
+image-export:
+	$(Q)docker save $(IMAGE) -o "$(CACHE)/image.tar"
 
 .PHONY: image-scan
-image-scan: $(IMAGE_TAR) | $(REPORTS) ## Scanne l'image (paquets OS, dépendances, secrets, configuration)
-	$(Q)$(TRIVY) image --input $(IMAGE_TAR) --scanners vuln,secret --image-config-scanners misconfig,secret \
-	  --format sarif --output $(REPORTS)/trivy-image.sarif
-	$(Q)$(TRIVY) image --input $(IMAGE_TAR) --scanners vuln,secret --image-config-scanners misconfig,secret \
+image-scan: image-export | $(REPORTS) ## Scanne l'image (paquets OS, dépendances, secrets, configuration)
+	$(Q)$(TRIVY) image --input /cache/image.tar --scanners vuln,secret --image-config-scanners misconfig,secret \
+	  --severity $(TRIVY_SEVERITY) --ignore-unfixed --format sarif --output $(REPORTS)/trivy-image.sarif
+	$(Q)$(TRIVY) image --input /cache/image.tar --scanners vuln,secret --image-config-scanners misconfig,secret \
 	  $(TRIVY_GATE)
 
 # ----------------------------------------------------------------------------
@@ -132,25 +136,22 @@ image-scan: $(IMAGE_TAR) | $(REPORTS) ## Scanne l'image (paquets OS, dépendance
 # ----------------------------------------------------------------------------
 TF_ENV := terraform/envs/dev
 # Les providers sont mis en cache hors de l'arbre git ; TF_DATA_DIR évite tout .terraform/ dans le dépôt.
-TERRAFORM := $(RUN) -e TF_IN_AUTOMATION=1 -e TF_PLUGIN_CACHE_DIR=/src/.cache/terraform/plugins \
-  -e TF_DATA_DIR=/src/.cache/terraform/data -e CHECKPOINT_DISABLE=1
-
-.cache/terraform/plugins:
-	@mkdir -p $@
+TERRAFORM := $(RUN) -e TF_IN_AUTOMATION=1 -e TF_PLUGIN_CACHE_DIR=/cache/terraform/plugins \
+  -e TF_DATA_DIR=/cache/terraform/data -e CHECKPOINT_DISABLE=1
 
 .PHONY: tf-fmt
-tf-fmt: | .cache/terraform/plugins ## Vérifie le formatage Terraform (terraform fmt -check)
+tf-fmt: ## Vérifie le formatage Terraform (terraform fmt -check)
 	$(Q)$(TERRAFORM) $(TERRAFORM_IMAGE) fmt -check -recursive -diff terraform
 
 .PHONY: tf-validate
-tf-validate: | .cache/terraform/plugins ## Valide la syntaxe et la cohérence du code Terraform
+tf-validate: ## Valide la syntaxe et la cohérence du code Terraform
 	$(Q)$(TERRAFORM) --entrypoint sh $(TERRAFORM_IMAGE) -c '\
 	  cd $(TF_ENV) && terraform init -backend=false -input=false >/dev/null && terraform validate'
 
 # Plan hors ligne : backend local jetable et faux identifiants, dans une copie temporaire.
 # Rien n'est créé, aucun appel AWS n'est émis ; le plan est exporté en JSON pour les policies.
 .PHONY: plan
-plan: | $(REPORTS) .cache/terraform/plugins ## terraform plan sans compte AWS, exporté dans reports/tfplan.json
+plan: | $(REPORTS) ## terraform plan sans compte AWS, exporté dans reports/tfplan.json
 	$(Q)$(TERRAFORM) -e TF_VAR_offline=true -e AWS_ACCESS_KEY_ID=offline -e AWS_SECRET_ACCESS_KEY=offline \
 	  -e TF_DATA_DIR=/tmp/tfdata --entrypoint sh $(TERRAFORM_IMAGE) -c '\
 	  cp -r terraform /tmp/tf && cd /tmp/tf/envs/dev && \
@@ -161,7 +162,7 @@ plan: | $(REPORTS) .cache/terraform/plugins ## terraform plan sans compte AWS, e
 	  terraform show -no-color /tmp/tfplan > /src/$(REPORTS)/tfplan.txt'
 
 .PHONY: tf-lock
-tf-lock: | .cache/terraform/plugins ## Régénère .terraform.lock.hcl (à lancer après un changement de version de provider)
+tf-lock: ## Régénère .terraform.lock.hcl (à lancer après un changement de version de provider)
 	$(Q)$(TERRAFORM) --entrypoint sh $(TERRAFORM_IMAGE) -c '\
 	  cd $(TF_ENV) && terraform init -backend=false -input=false >/dev/null && \
 	  terraform providers lock -platform=linux_amd64 -platform=linux_arm64'
@@ -172,7 +173,7 @@ tf-lock: | .cache/terraform/plugins ## Régénère .terraform.lock.hcl (à lance
 .PHONY: iac-trivy
 iac-trivy: | $(REPORTS) ## Mauvaises configurations Terraform et Dockerfile (Trivy config)
 	$(Q)$(TRIVY) config --skip-dirs .cache --skip-dirs $(REPORTS) --ignorefile .trivyignore.yaml \
-	  --format sarif --output $(REPORTS)/trivy-config.sarif .
+	  --severity $(TRIVY_SEVERITY) --format sarif --output $(REPORTS)/trivy-config.sarif .
 	$(Q)$(TRIVY) config --skip-dirs .cache --skip-dirs $(REPORTS) --ignorefile .trivyignore.yaml \
 	  --severity $(TRIVY_SEVERITY) --exit-code 1 .
 
@@ -192,3 +193,26 @@ policy-test: ## Tests unitaires des policies Rego (conftest verify)
 policy: plan policy-test ## Applique les policies maison au plan Terraform (Conftest / OPA)
 	$(Q)$(RUN) $(CONFTEST_IMAGE) test $(REPORTS)/tfplan.json --policy policies --all-namespaces --no-color \
 	  | tee $(REPORTS)/policy.txt
+
+# ----------------------------------------------------------------------------
+# Étape 8 : quality gates, exceptions, synthèse et démonstration
+# ----------------------------------------------------------------------------
+.PHONY: exceptions
+exceptions: ## Vérifie que chaque exception est justifiée, datée et non expirée
+	$(Q)scripts/check-exceptions.sh
+
+.PHONY: scan
+scan: ## Lance tous les quality gates et affiche une synthèse (ne s'arrête pas au premier échec)
+	$(Q)scripts/scan-all.sh
+
+.PHONY: summary
+summary: | $(REPORTS) ## Construit reports/summary.md à partir des résultats et des rapports SARIF
+	$(Q)$(RUN) -e NEEDS_JSON -e PYTHONDONTWRITEBYTECODE=1 $(PYTHON_IMAGE) python scripts/summary.py
+
+.PHONY: demo-good
+demo-good: ## Démo : le dépôt sain passe tous les gates
+	$(Q)scripts/demo.sh good
+
+.PHONY: demo-bad
+demo-bad: ## Démo : les failles injectées sont toutes bloquées
+	$(Q)scripts/demo.sh bad

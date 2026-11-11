@@ -205,3 +205,66 @@ jobs:
           name: report-iac
           path: reports/
           retention-days: 7
+
+  exceptions:
+    name: exceptions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Exceptions justifiées, datées et non expirées
+        run: make exceptions
+
+  # Vérifie les contrôles eux-mêmes : les failles de démonstration doivent toutes être bloquées.
+  # Informatif : ce job n'est pas un prérequis du security-gate.
+  gates-selftest:
+    name: gates-selftest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Les failles injectées sont-elles toutes bloquées ?
+        run: make demo-bad
+
+  # Un seul statut à exiger dans la protection de branche : il agrège tous les contrôles.
+  security-gate:
+    name: security-gate
+    if: always()
+    needs: [workflow-lint, build-test, secrets, sast, sca, image, iac, exceptions]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write # commenter la PR avec la synthèse
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Récupérer les rapports des jobs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          pattern: report-*
+          path: reports
+      - name: Verdict
+        # Tout résultat autre que "success" (failure, cancelled, skipped) bloque.
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: make summary
+      - name: Publier la synthèse
+        if: always()
+        run: cat reports/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Commenter la PR
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: scripts/pr-comment.sh security-gate reports/summary.md

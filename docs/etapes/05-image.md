@@ -52,7 +52,7 @@ make build image-scan
 ```
 
 ```text
-│ .cache/image.tar (debian 13.7)                    │   debian   │        0        │    -    │
+│ /cache/image.tar (debian 13.7)                    │   debian   │        0        │    -    │
 │ …/site-packages/flask-3.1.3.dist-info/METADATA    │ python-pkg │        0        │    -    │
 │ …/site-packages/gunicorn-27.0.0.dist-info/METADATA│ python-pkg │        0        │    -    │
 ```
