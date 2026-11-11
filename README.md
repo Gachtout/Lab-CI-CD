@@ -121,7 +121,8 @@ Makefile             toutes les commandes, en images Docker épinglées par dige
 | Élément | État |
 |---|---|
 | Contrôles locaux, démo good et bad, policies et leurs tests | Exécutés |
-| Workflows GitHub Actions | Validés par actionlint, **pas encore exécutés sur GitHub** |
+| Workflow `pr-security` | Exécuté sur GitHub : 11 jobs verts |
+| Workflows `terraform-plan`, `deploy`, `destroy` | Validés par actionlint, **pas encore exécutés** |
 | Ruleset et script de configuration GitHub | Syntaxe validée, **pas encore appliqués** |
 | Terraform AWS (bootstrap et dev) | `validate` et plan hors ligne, **jamais appliqué sur AWS** |
 
