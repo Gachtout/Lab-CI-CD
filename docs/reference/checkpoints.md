@@ -2,7 +2,7 @@
 
 Certaines actions ne peuvent être faites que par toi : créer le dépôt, régler GitHub, créer le compte AWS. Chaque point de contrôle indique quoi faire, dans quel ordre, et ce qu'il faut observer.
 
-État au moment de la livraison : **tout ce qui tourne en local a été exécuté** (`make demo-good`, `make demo-bad`, actionlint sur les quatre workflows, `terraform validate`, plans hors ligne). **Rien n'a été exécuté sur GitHub ni sur AWS.**
+État au moment de la livraison : tout ce qui tourne en local a été exécuté (`make demo-good`, `make demo-bad`, actionlint, `terraform validate`, plans hors ligne), et le workflow `pr-security` a tourné sur GitHub. **Le workflow `terraform-plan`, le ruleset, les commentaires de PR et tout ce qui touche AWS n'ont pas encore été exécutés.**
 
 ## Point de contrôle 0 : rejouer en local
 

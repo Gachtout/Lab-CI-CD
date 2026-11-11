@@ -65,6 +65,7 @@ jobs:
     permissions:
       contents: read
       security-events: write # publier le SARIF dans Code Scanning
+      actions: read # requis par upload-sarif sur un dépôt privé
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -76,6 +77,9 @@ jobs:
         # Le jeton d'une PR venant d'un fork est en lecture seule : on n'essaie pas.
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        # Publier un rapport n'est pas un contrôle : si Code Scanning est indisponible
+        # (dépôt privé sans GitHub Advanced Security), le verdict reste celui du scan.
+        continue-on-error: true
         with:
           sarif_file: reports/gitleaks.sarif
           category: gitleaks
@@ -94,6 +98,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read # requis par upload-sarif sur un dépôt privé
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -103,6 +108,9 @@ jobs:
       - name: Publier dans Code Scanning
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        # Publier un rapport n'est pas un contrôle : si Code Scanning est indisponible
+        # (dépôt privé sans GitHub Advanced Security), le verdict reste celui du scan.
+        continue-on-error: true
         with:
           sarif_file: reports/semgrep.sarif
           category: semgrep
@@ -121,6 +129,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read # requis par upload-sarif sur un dépôt privé
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -130,6 +139,9 @@ jobs:
       - name: Publier dans Code Scanning
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        # Publier un rapport n'est pas un contrôle : si Code Scanning est indisponible
+        # (dépôt privé sans GitHub Advanced Security), le verdict reste celui du scan.
+        continue-on-error: true
         with:
           sarif_file: reports/trivy-sca.sarif
           category: trivy-sca
@@ -148,6 +160,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read # requis par upload-sarif sur un dépôt privé
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -159,6 +172,9 @@ jobs:
       - name: Publier dans Code Scanning
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        # Publier un rapport n'est pas un contrôle : si Code Scanning est indisponible
+        # (dépôt privé sans GitHub Advanced Security), le verdict reste celui du scan.
+        continue-on-error: true
         with:
           sarif_file: reports/trivy-image.sarif
           category: trivy-image
@@ -177,6 +193,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read # requis par upload-sarif sur un dépôt privé
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -189,12 +206,18 @@ jobs:
       - name: Publier Trivy dans Code Scanning
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        # Publier un rapport n'est pas un contrôle : si Code Scanning est indisponible
+        # (dépôt privé sans GitHub Advanced Security), le verdict reste celui du scan.
+        continue-on-error: true
         with:
           sarif_file: reports/trivy-config.sarif
           category: trivy-config
       - name: Publier Checkov dans Code Scanning
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        # Publier un rapport n'est pas un contrôle : si Code Scanning est indisponible
+        # (dépôt privé sans GitHub Advanced Security), le verdict reste celui du scan.
+        continue-on-error: true
         with:
           sarif_file: reports/checkov.sarif
           category: checkov

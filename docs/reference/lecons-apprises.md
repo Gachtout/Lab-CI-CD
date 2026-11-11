@@ -24,6 +24,8 @@ Ces constats viennent de la construction du lab. Chacun correspond à quelque ch
 
 **Docker Hub limite le débit.** Plusieurs `429 Too Many Requests` pendant la construction. Les registres alternatifs et la variable `DOCKERHUB` viennent de là. → [ADR 0001](../adr/0001-architecture.md)
 
+**Publier un rapport n'est pas un contrôle.** Première exécution réelle sur GitHub : cinq jobs rouges alors que tous les scans passaient. Le dépôt était privé, Code Scanning indisponible, et l'envoi du SARIF faisait échouer le job. L'envoi est désormais en `continue-on-error`, avec la permission `actions: read` qu'il exige sur un dépôt privé. Aucun test local ne pouvait le révéler.
+
 ## Sur la méthode
 
 **Vérifier en exécutant.** L'audit de l'ancien lab a trouvé, par exécution, une route d'injection SQL qui plantait au lieu d'être exploitable, et une protection de branche qui autorisait le push direct. Aucun des deux n'était visible à la lecture.
