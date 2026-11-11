@@ -1,0 +1,8 @@
+# Image volontairement vulnérable, injectée par la vérification de l'étape 5 :
+# base en fin de vie, tag mobile, exécution en root.
+FROM public.ecr.aws/docker/library/python:3.7-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY app.py .
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:app"]

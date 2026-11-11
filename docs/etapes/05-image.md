@@ -15,75 +15,84 @@ Deux points contre-intuitifs :
 - **Épingler par digest fige aussi les failles.** L'image de base ne bouge plus, donc ses CVE non plus. Il faut appliquer les correctifs au build (`apt-get upgrade`) et monter régulièrement le digest.
 - **Un outil d'installation est une dépendance.** `pip` embarque ses propres bibliothèques. Il ne sert plus une fois l'application installée : le retirer supprime ses CVE.
 
-## Ce qu'on fait
+## Ce qui t'est fourni
 
-- `make image-scan` : exporte l'image en archive (`docker save`), puis la donne à Trivy. Trivy n'a donc **pas besoin du socket Docker**, qui équivaut à un accès root sur la machine.
-- Scanners activés : vulnérabilités (OS et Python), secrets dans les couches, mauvaise configuration de l'image.
-- Même seuil qu'à l'étape 4 : `HIGH` et `CRITICAL` avec correctif.
-- Job `image` dans le workflow.
+- La cible `image-scan`, vide.
+- Les options de seuil Trivy que tu as écrites à l'étape 4.
 
-## Ce que le premier scan a révélé
+## Énoncé
 
-L'image de l'étape 2 semblait propre : base récente, épinglée, non-root. Le premier scan a pourtant échoué.
+Livrables :
 
-```text
-== debian 13.7
-   zlib1g      1:1.3.dfsg+really1.3.1-1+b1 -> …-1+deb13u1   HIGH CVE-2026-76844
-   zlib1g      1:1.3.dfsg+really1.3.1-1+b1 -> …-1+deb13u1   HIGH CVE-2026-85091
-== Python
-   msgpack     1.1.2  -> 1.2.3    HIGH CVE-2026-114613
-   msgpack     1.1.2  -> 1.2.1    HIGH GHSA-6v7p-g79w-8964
-   setuptools  70.3.0 -> 78.1.1   HIGH CVE-2025-47273
-   urllib3     2.7.0  -> 2.8.0    HIGH CVE-2026-97687
-   urllib3     2.7.0  -> 2.8.0    HIGH CVE-2026-97689
-```
+- La cible `make image-scan`.
+- Un `app/Dockerfile` qui passe ce scan.
+- Un job `image` dans `pr-security.yml`.
 
-Aucune de ces bibliothèques Python n'est dans `requirements.txt` : elles sont embarquées par `pip` (`site-packages/pip/_vendor/`). Deux lignes ont été ajoutées au `Dockerfile` :
+Contraintes :
 
-```dockerfile
-RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir -r requirements.txt && pip uninstall --yes pip
-```
+1. `make build image-scan` réussit sur ton image : aucune vulnérabilité `HIGH` ou `CRITICAL` avec correctif, dans le système comme dans les bibliothèques Python.
+2. `make image-scan` échoue sur une image construite à partir d'une base en fin de vie.
+3. Le scanner n'a pas accès au socket Docker.
+4. `make image-scan` échoue sur une image qui s'exécute en root : la configuration de l'image est analysée, pas seulement ses paquets.
+5. Le rapport SARIF est écrit dans `reports/trivy-image.sarif`.
+6. Le job `image` appelle `make build` puis `make image-scan`.
 
-## Comment vérifier
+## Contrat d'interface
+
+Ces noms sont imposés : la vérification en dépend.
+
+| Élément | Valeur imposée |
+|---|---|
+| Cible `make` | `image-scan` |
+| Image analysée | celle que désigne `IMAGE` ; `make image-scan IMAGE=x` analyse une image existante sans la reconstruire |
+| Rapport | `reports/trivy-image.sarif` |
+| Nom du job | `image` |
+
+## Critère de réussite
 
 ```bash
-make build image-scan
+make check-etape-05
 ```
 
-```text
-│ /cache/image.tar (debian 13.7)                    │   debian   │        0        │    -    │
-│ …/site-packages/flask-3.1.3.dist-info/METADATA    │ python-pkg │        0        │    -    │
-│ …/site-packages/gunicorn-27.0.0.dist-info/METADATA│ python-pkg │        0        │    -    │
-```
+Chaque ligne `ECHEC [Cn]` renvoie à la contrainte `n` ci-dessus et donne l'emplacement en cause, jamais la correction. Les journaux détaillés sont dans `reports/checks/`. Teste toujours en local avant de pousser.
+
+## Indices
+
+Ouvre-les dans l'ordre, et seulement après avoir cherché.
+
+??? tip "Indice 1 : par où commencer"
+    - Un scanner d'image n'a pas besoin du démon Docker : une image est une archive.
+    - Lance d'abord le scan sur ton image de l'étape 2 et lis ce qu'il trouve avant de modifier quoi que ce soit.
+
+??? tip "Indice 2 : les points qui coincent"
+    - Docker sait exporter une image dans un fichier ; Trivy sait lire ce fichier. Le dossier de cache de la plomberie est monté dans le conteneur.
+    - Les constats viennent de deux endroits : les paquets du système, et des bibliothèques Python qui ne sont pas dans `requirements.txt`. Cherche qui les a apportées.
+    - Trivy distingue l'analyse du contenu de l'image et l'analyse de sa configuration.
+
+??? tip "Indice 3 : presque la réponse"
+    - Exporte l'image dans le dossier de cache, puis donne ce fichier à Trivy par son option d'entrée.
+    - Les paquets du système se mettent à jour au build ; pense à nettoyer les listes du gestionnaire de paquets dans la même couche.
+    - L'outil d'installation Python n'est plus utile une fois les dépendances installées.
+    - L'option qui active l'analyse de la configuration de l'image s'appelle `--image-config-scanners`.
 
 ## Casse-le volontairement
 
-Remplace `app/Dockerfile` par une version « à l'ancienne » :
+Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles d'un corrigé.
 
-```dockerfile
-FROM python:3.7-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY app.py .
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:app"]
-```
+1. Scanne l'image de l'étape 2 avant tout durcissement. Combien de constats, et d'où viennent-ils ?
+2. Construis l'image depuis une base Python en fin de vie, sans utilisateur déclaré. Compare les totaux.
+3. Monte le socket Docker dans un conteneur et liste les conteneurs de l'hôte. Que peux-tu faire d'autre avec cet accès ?
 
-Python 3.7 n'accepte pas `gunicorn==27.0.0` : mets `gunicorn==20.1.0` dans `requirements.txt`, puis `make build image-scan`.
+## Défends ton choix
 
-```text
-Total: 98 (HIGH: 85, CRITICAL: 13)
-│ libexpat1  │ CVE-2024-45491 │ CRITICAL │ 2.5.0-1  │ 2.5.0-1+deb12u1  │
-│ libssl3    │ CVE-2026-31789 │ CRITICAL │ 3.0.9-1  │ 3.0.19-1~deb12u2 │
-│ perl-base  │ CVE-2026-13221 │ CRITICAL │ 5.36.0-7 │ 5.36.0-7+deb12u4 │
-…
-Failures: 1 (HIGH: 1, CRITICAL: 0)
-DS-0002 (HIGH): Specify at least 1 USER command in Dockerfile with non-root user as argument
-make: *** [Makefile:132: image-scan] Error 1
-```
+À savoir expliquer à l'oral, sans notes.
 
-98 vulnérabilités système pour un `Dockerfile` de six lignes qui « marche ». Annule avec `git checkout app/`.
+1. Pourquoi scanner l'image alors que les dépendances ont déjà été scannées ?
+2. Pourquoi le socket Docker équivaut-il à un accès root sur la machine ?
+3. Une image verte aujourd'hui l'est-elle demain ? Que mets-tu en place ?
+4. D'où venaient les vulnérabilités Python absentes de `requirements.txt` ? Qu'en déduis-tu sur les outils de build ?
+5. Mettre à jour les paquets au build nuit à la reproductibilité. Comment arbitres-tu ?
+6. Quelle différence entre une vulnérabilité de l'image et une mauvaise configuration de l'image ?
 
 ## Côté Wiz, en entreprise
 
@@ -94,3 +103,11 @@ make: *** [Makefile:132: image-scan] Error 1
 | Scan au build uniquement | Scan au build **et** scan continu des images déjà déployées, depuis le registre et les workloads |
 
 Le dernier point est la vraie différence : une image verte aujourd'hui aura des CVE demain. Wiz la re-scanne sans nouveau build et sait si elle tourne, sur quoi, et si elle est exposée à Internet. Ce lab ne voit l'image qu'au moment du pipeline.
+
+## Corrigé
+
+À ouvrir seulement une fois `make check-etape-05` vert et les questions travaillées : [`etape-05-solution`](https://github.com/Gachtout/Lab-CI-CD/tree/etape-05-solution). La version finale de tout le parcours est sur la branche [`solution`](https://github.com/Gachtout/Lab-CI-CD/tree/solution).
+
+Corrections apportées plus tard à ce corrigé :
+
+- Le corrigé de cette étape garde l'archive de l'image dans `.cache/` du dépôt ; le cache devient partageable (variable `CACHE`) à l'étape 8.
