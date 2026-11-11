@@ -89,7 +89,7 @@ make secrets                                   # échec, encore
 File:        app/config_local.py
 Commit:      55ddc1260b7973a7ddd0411d065b4ac5a750467f
 WRN leaks found: 1
-make: *** [Makefile:90: secrets] Error 1
+make: *** [Makefile:95: secrets] Error 1
 ```
 
 Le second scan échoue toujours : le secret est dans un commit passé. Pour nettoyer ton clone de test : `git reset --hard origin/main` (ou reviens au dernier commit sain).

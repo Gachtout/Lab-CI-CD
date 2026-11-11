@@ -67,7 +67,7 @@ AWS-0086 (HIGH): Public access block does not block public ACLs
 AWS-0087 (HIGH): Public access block does not block public policies
 AWS-0091 (HIGH): Public access block does not ignore public ACLs
 AWS-0093 (HIGH): Public access block does not restrict public buckets
-make: *** [Makefile:175: iac-trivy] Error 1
+make: *** [Makefile:183: iac-trivy] Error 1
 ```
 
 ### Checkov
@@ -79,7 +79,7 @@ Check: CKV_AWS_55: "Ensure S3 bucket has ignore public ACLs enabled"
 Check: CKV_AWS_56: "Ensure S3 bucket has 'restrict_public_buckets' enabled"
 Check: CKV2_AWS_6: "Ensure that S3 bucket has a Public Access block"
 Passed checks: 65, Failed checks: 5, Skipped checks: 4
-make: *** [Makefile:181: iac-checkov] Error 1
+make: *** [Makefile:188: iac-checkov] Error 1
 ```
 
 ### Policies sur le plan
@@ -91,7 +91,7 @@ FAIL - reports/tfplan.json - lab.s3 - [S3-01] … : ignore_public_acls doit valo
 FAIL - reports/tfplan.json - lab.s3 - [S3-01] … : restrict_public_buckets doit valoir true (accès public bloqué)
 FAIL - reports/tfplan.json - lab.reseau - [NET-01] module.app_sg.aws_vpc_security_group_ingress_rule.https["0.0.0.0/0"] : entrée ouverte à tout Internet (0.0.0.0/0)
 9 tests, 4 passed, 0 warnings, 5 failures, 0 exceptions
-make: *** [Makefile:193: policy] Error 1
+make: *** [Makefile:200: policy] Error 1
 ```
 
 ### Le résultat à retenir

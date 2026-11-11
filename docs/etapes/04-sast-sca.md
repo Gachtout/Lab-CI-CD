@@ -68,7 +68,7 @@ app.config["DEBUG"] = True
    ❯❯❱ python.flask.security.injection.tainted-sql-string.tainted-sql-string
           ❰❰ Blocking ❱❱
            45┆ rows = con.execute("SELECT id, name, role FROM users WHERE name = '%s'" % name).fetchall()
-make: *** [Makefile:106: sast] Error 1
+make: *** [Makefile:112: sast] Error 1
 ```
 
 Observe que `jeton-en-dur-a-remplacer` n'a pas été vu par Gitleaks à l'étape 3 (ni format, ni entropie). C'est la règle Semgrep maison qui l'attrape, parce qu'elle regarde la **structure** du code, pas la valeur. Les deux outils se complètent.
@@ -88,7 +88,7 @@ Total: 3 (HIGH: 3, CRITICAL: 0)
 │ flask    │ CVE-2023-30861 │ HIGH │ fixed │ 2.2.2 │ 2.3.2, 2.2.5 │
 │ werkzeug │ CVE-2023-25577 │      │       │       │ 2.2.3        │
 │          │ CVE-2024-34069 │      │       │       │ 3.0.3        │
-make: *** [Makefile:111: sca] Error 1
+make: *** [Makefile:118: sca] Error 1
 ```
 
 La colonne *Fixed Version* donne la correction. Annule avec `git checkout app/`.

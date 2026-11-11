@@ -236,7 +236,7 @@ TF_AWS_INIT := cd $(TF_ENV) && terraform init -input=false -reconfigure \
 
 .PHONY: aws-check
 aws-check:
-	@test -n "$${TF_STATE_BUCKET:-}" || { echo "TF_STATE_BUCKET est vide : fais d'abord le bootstrap (docs/reference/bootstrap-aws.md)"; exit 1; }
+	@test -n "$${TF_STATE_BUCKET:-}" || { echo "TF_STATE_BUCKET est vide : fais d'abord le bootstrap (docs/etapes/10-oidc-deploy.md)"; exit 1; }
 	@test -n "$${AWS_REGION:-}" || { echo "AWS_REGION est vide"; exit 1; }
 
 .PHONY: aws-plan

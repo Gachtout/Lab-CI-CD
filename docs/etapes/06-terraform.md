@@ -78,7 +78,7 @@ Dans `terraform/modules/vpc/main.tf`, retire les espaces d'alignement de la lign
  resource "aws_vpc" "this" {
 -  cidr_block = var.cidr
 +  cidr_block           = var.cidr
-make: *** [Makefile:143: tf-fmt] Error 3
+make: *** [Makefile:145: tf-fmt] Error 3
 ```
 
 ### Validation
@@ -90,7 +90,7 @@ Dans `terraform/envs/dev/main.tf`, remplace `module.vpc.vpc_id` par `module.vpc.
 │   on main.tf line 15, in module "app_sg":
 │   15:   vpc_id        = module.vpc.identifiant
 │ This object does not have an attribute named "identifiant".
-make: *** [Makefile:147: tf-validate] Error 1
+make: *** [Makefile:149: tf-validate] Error 1
 ```
 
 ### Ce que ces contrôles ne voient pas

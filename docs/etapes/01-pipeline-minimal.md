@@ -71,7 +71,7 @@ Dans `pr-security.yml`, remplace `ubuntu-24.04` par `ubuntu-99.99`, puis relance
 ```text
 .github/workflows/pr-security.yml:23:14: label "ubuntu-99.99" is unknown. available labels are
 "windows-latest", …, "ubuntu-24.04", … [runner-label]
-make: *** [Makefile:59: lint-workflows] Error 1
+make: *** [Makefile:67: lint-workflows] Error 1
 ```
 
 `make` renvoie un code non nul : dans la CI, le job serait rouge. Deuxième essai, plus instructif : remplace la commande par `echo ${{ github.event.pull_request.title }}`.

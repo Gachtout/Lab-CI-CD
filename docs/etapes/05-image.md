@@ -80,7 +80,7 @@ Total: 98 (HIGH: 85, CRITICAL: 13)
 …
 Failures: 1 (HIGH: 1, CRITICAL: 0)
 DS-0002 (HIGH): Specify at least 1 USER command in Dockerfile with non-root user as argument
-make: *** [Makefile:126: image-scan] Error 1
+make: *** [Makefile:132: image-scan] Error 1
 ```
 
 98 vulnérabilités système pour un `Dockerfile` de six lignes qui « marche ». Annule avec `git checkout app/`.

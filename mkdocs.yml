@@ -28,3 +28,30 @@ markdown_extensions:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Accueil: index.md
+  - Parcours:
+      - "0. Audit de l'existant": 00-audit.md
+      - "1. Pipeline minimal": etapes/01-pipeline-minimal.md
+      - "2. Build, tests, Docker": etapes/02-build-test-docker.md
+      - "3. Secrets": etapes/03-secrets.md
+      - "4. SAST et SCA": etapes/04-sast-sca.md
+      - "5. Image": etapes/05-image.md
+      - "6. Terraform": etapes/06-terraform.md
+      - "7. Scan IaC et policies": etapes/07-iac-policies.md
+      - "8. Quality gates": etapes/08-quality-gates.md
+      - "9. Protection de branche": etapes/09-branch-protection.md
+      - "10. OIDC, apply, destroy": etapes/10-oidc-deploy.md
+      - "11. Prowler et SBOM": etapes/11-prowler-sbom.md
+  - Référence:
+      - "Correspondance Wiz": reference/mapping-wiz.md
+      - "Limites face à Wiz": reference/limites.md
+      - "Leçons apprises": reference/lecons-apprises.md
+      - "En production": reference/en-production.md
+      - "Points de contrôle": reference/checkpoints.md
+      - "Captures à réaliser": reference/captures.md
+  - Décisions (ADR):
+      - "0001 Architecture": adr/0001-architecture.md
+      - "0002 Outils": adr/0002-outils.md
+      - "0003 Seuils et exceptions": adr/0003-gates-et-exceptions.md
