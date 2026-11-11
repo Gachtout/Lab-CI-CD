@@ -1,4 +1,5 @@
-# Lab DevSecOps : toutes les commandes tournent dans des images Docker épinglées par digest.
+# Lab DevSecOps, mode exercice. La plomberie Docker ci-dessous est fournie ;
+# les cibles marquées [À FAIRE] sont à écrire, étape par étape (docs/etapes/).
 # La CI appelle exactement ces cibles : ce qui est vert ici est vert dans GitHub Actions.
 SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -16,13 +17,6 @@ TRIVY_IMAGE      := ghcr.io/aquasecurity/trivy:0.76.2@sha256:8f6bb947dbc528902e1
 CHECKOV_IMAGE    := ghcr.io/bridgecrewio/checkov:3.4.3@sha256:bfe9d70bb7f044aba49bd99675813445f106dee6072da583f51008cb667f3a63
 TERRAFORM_IMAGE  := $(DOCKERHUB)/hashicorp/terraform:1.17.1@sha256:a5d5a5a892c98f60fcbfa81eac2a40fc19e7b3fa7719bccae10ff6111d22524a
 CONFTEST_IMAGE   := $(DOCKERHUB)/openpolicyagent/conftest:v0.71.1@sha256:0e77cdf7c1fcde035f3c579e4aaa6664ee2a8be5777eaa9af9f520cdd02280c0
-PROWLER_IMAGE    := public.ecr.aws/prowler-cloud/prowler:5.48.0@sha256:18c46f938c19f0409be29a0b39b33ac43187e6d0eabaf6371d7468cc682d875b
-
-# ----------------------------------------------------------------------------
-# Quality gates : les seuils qui font échouer une cible (détail : étape 8).
-# ----------------------------------------------------------------------------
-TRIVY_SEVERITY   ?= HIGH,CRITICAL
-SEMGREP_SEVERITY ?= ERROR
 
 # ----------------------------------------------------------------------------
 # Réseau d'entreprise (facultatif) : proxy sortant et autorité de certification.
@@ -63,215 +57,135 @@ clean: ## Supprime les rapports et les caches locaux
 # Étape 1 : pipeline minimal
 # ----------------------------------------------------------------------------
 .PHONY: lint-workflows
-lint-workflows: | $(REPORTS) ## Vérifie la syntaxe des workflows GitHub Actions (actionlint)
-	$(Q)$(RUN) $(ACTIONLINT_IMAGE) 2>&1 | tee $(REPORTS)/actionlint.txt
+lint-workflows: ## [À FAIRE] Vérifie la syntaxe des workflows GitHub Actions (actionlint)
+	@echo "lint-workflows : non implémenté (docs/etapes/01-pipeline-minimal.md)"; exit 1
 
 # ----------------------------------------------------------------------------
 # Étape 2 : tests et image Docker
 # ----------------------------------------------------------------------------
-IMAGE          ?= devsecops-lab-app:local
-DOCKER_BUILD   ?= docker build $(NET_FLAGS)
-
 .PHONY: test
-test: ## Lance les tests unitaires de l'application (pytest)
-	$(Q)$(RUN) -w /src/app -e PYTHONDONTWRITEBYTECODE=1 $(PYTHON_IMAGE) sh -c '\
-	  python -m venv /tmp/venv && \
-	  /tmp/venv/bin/pip install --quiet --disable-pip-version-check -r requirements.txt -r requirements-dev.txt && \
-	  /tmp/venv/bin/python -m pytest -q -p no:cacheprovider tests'
+test: ## [À FAIRE] Lance les tests unitaires de l'application (pytest)
+	@echo "test : non implémenté (docs/etapes/02-build-test-docker.md)"; exit 1
 
 .PHONY: build
-build: ## Construit l'image Docker de l'application
-	$(Q)$(DOCKER_BUILD) -t $(IMAGE) app
+build: ## [À FAIRE] Construit l'image Docker de l'application
+	@echo "build : non implémenté (docs/etapes/02-build-test-docker.md)"; exit 1
 
 # ----------------------------------------------------------------------------
 # Étape 3 : secrets
 # ----------------------------------------------------------------------------
-# safe.directory : le dépôt monté n'appartient pas forcément à l'utilisateur du conteneur.
-GITLEAKS := $(RUN) -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/src \
-  $(GITLEAKS_IMAGE) --config .gitleaks.toml --redact --no-banner --verbose
-
 .PHONY: secrets
-secrets: | $(REPORTS) ## Cherche des secrets dans tout l'historique git (Gitleaks) : bloque toujours
-	$(Q)$(GITLEAKS) git --report-format sarif --report-path $(REPORTS)/gitleaks.sarif .
+secrets: ## [À FAIRE] Cherche des secrets dans tout l'historique git (Gitleaks) : bloque toujours
+	@echo "secrets : non implémenté (docs/etapes/03-secrets.md)"; exit 1
 
 .PHONY: secrets-staged
-secrets-staged: ## Cherche des secrets dans les fichiers indexés (utilisé par le hook pre-commit)
-	$(Q)$(GITLEAKS) git --pre-commit --staged .
+secrets-staged: ## [À FAIRE] Cherche des secrets dans les fichiers indexés (utilisé par le hook pre-commit)
+	@echo "secrets-staged : non implémenté (docs/etapes/03-secrets.md)"; exit 1
 
 # ----------------------------------------------------------------------------
 # Étape 4 : SAST (ton code) et SCA (tes dépendances)
 # ----------------------------------------------------------------------------
-SEMGREP := $(RUN) -e SEMGREP_SEND_METRICS=off -e SEMGREP_ENABLE_VERSION_CHECK=0 $(SEMGREP_IMAGE) semgrep scan \
-  --config p/python --config p/flask --config .semgrep/ --quiet
-TRIVY := $(RUN) -e TRIVY_CACHE_DIR=/cache/trivy -e TRIVY_NO_PROGRESS=true $(TRIVY_IMAGE)
-# Les rapports SARIF utilisent le même filtre que le gate : ce qui est affiché est ce qui bloque.
-TRIVY_GATE := --severity $(TRIVY_SEVERITY) --ignore-unfixed --exit-code 1
-
 .PHONY: sast
-sast: | $(REPORTS) ## Analyse statique du code (Semgrep) : bloque sur la sévérité ERROR
-	$(Q)$(SEMGREP) --sarif-output $(REPORTS)/semgrep.sarif --text --error --severity $(SEMGREP_SEVERITY) app
+sast: ## [À FAIRE] Analyse statique du code (Semgrep) : bloque sur la sévérité ERROR
+	@echo "sast : non implémenté (docs/etapes/04-sast-sca.md)"; exit 1
 
 .PHONY: sca
-sca: | $(REPORTS) ## Dépendances vulnérables (Trivy fs) : bloque sur HIGH/CRITICAL avec correctif
-	$(Q)$(TRIVY) fs --scanners vuln --severity $(TRIVY_SEVERITY) --ignore-unfixed \
-	  --format sarif --output $(REPORTS)/trivy-sca.sarif app
-	$(Q)$(TRIVY) fs --scanners vuln $(TRIVY_GATE) app
+sca: ## [À FAIRE] Dépendances vulnérables (Trivy fs) : bloque sur HIGH/CRITICAL avec correctif
+	@echo "sca : non implémenté (docs/etapes/04-sast-sca.md)"; exit 1
 
 # ----------------------------------------------------------------------------
 # Étape 5 : image Docker
 # ----------------------------------------------------------------------------
-# L'image est exportée en archive : Trivy n'a pas besoin d'accéder au socket Docker.
-.PHONY: image-export
-image-export:
-	$(Q)docker save $(IMAGE) -o "$(CACHE)/image.tar"
-
 .PHONY: image-scan
-image-scan: image-export | $(REPORTS) ## Scanne l'image (paquets OS, dépendances, secrets, configuration)
-	$(Q)$(TRIVY) image --input /cache/image.tar --scanners vuln,secret --image-config-scanners misconfig,secret \
-	  --severity $(TRIVY_SEVERITY) --ignore-unfixed --format sarif --output $(REPORTS)/trivy-image.sarif
-	$(Q)$(TRIVY) image --input /cache/image.tar --scanners vuln,secret --image-config-scanners misconfig,secret \
-	  $(TRIVY_GATE)
+image-scan: ## [À FAIRE] Scanne l'image (paquets OS, dépendances, secrets, configuration)
+	@echo "image-scan : non implémenté (docs/etapes/05-image.md)"; exit 1
 
 # ----------------------------------------------------------------------------
 # Étape 6 : Terraform (fmt, validate, plan sans compte AWS)
 # ----------------------------------------------------------------------------
-TF_ENV := terraform/envs/dev
-# Les providers sont mis en cache hors de l'arbre git ; TF_DATA_DIR évite tout .terraform/ dans le dépôt.
-TERRAFORM := $(RUN) -e TF_IN_AUTOMATION=1 -e TF_PLUGIN_CACHE_DIR=/cache/terraform/plugins \
-  -e TF_DATA_DIR=/cache/terraform/data -e CHECKPOINT_DISABLE=1
-
 .PHONY: tf-fmt
-tf-fmt: ## Vérifie le formatage Terraform (terraform fmt -check)
-	$(Q)$(TERRAFORM) $(TERRAFORM_IMAGE) fmt -check -recursive -diff terraform
+tf-fmt: ## [À FAIRE] Vérifie le formatage Terraform (terraform fmt -check)
+	@echo "tf-fmt : non implémenté (docs/etapes/06-terraform.md)"; exit 1
 
 .PHONY: tf-validate
-tf-validate: ## Valide la syntaxe et la cohérence du code Terraform
-	$(Q)for dir in $(TF_ENV) terraform/bootstrap; do \
-	  echo "== $$dir"; \
-	  $(TERRAFORM) -e TF_DATA_DIR=/cache/terraform/data-$$(basename $$dir) --entrypoint sh $(TERRAFORM_IMAGE) -c \
-	    "cd $$dir && terraform init -backend=false -input=false >/dev/null && terraform validate" || exit 1; \
-	done
+tf-validate: ## [À FAIRE] Valide la syntaxe et la cohérence du code Terraform
+	@echo "tf-validate : non implémenté (docs/etapes/06-terraform.md)"; exit 1
 
-# Plan hors ligne : backend local jetable et faux identifiants, dans une copie temporaire.
-# Rien n'est créé, aucun appel AWS n'est émis ; le plan est exporté en JSON pour les policies.
 .PHONY: plan
-plan: | $(REPORTS) ## terraform plan sans compte AWS, exporté dans reports/tfplan.json
-	$(Q)$(TERRAFORM) -e TF_VAR_offline=true -e AWS_ACCESS_KEY_ID=offline -e AWS_SECRET_ACCESS_KEY=offline \
-	  -e TF_DATA_DIR=/tmp/tfdata --entrypoint sh $(TERRAFORM_IMAGE) -c '\
-	  cp -r terraform /tmp/tf && cd /tmp/tf/envs/dev && \
-	  printf "terraform {\n  backend \"local\" {}\n}\n" > backend_override.tf && \
-	  terraform init -input=false >/dev/null && \
-	  terraform plan -input=false -lock=false -out=/tmp/tfplan && \
-	  terraform show -json /tmp/tfplan > /src/$(REPORTS)/tfplan.json && \
-	  terraform show -no-color /tmp/tfplan > /src/$(REPORTS)/tfplan.txt'
+plan: ## [À FAIRE] terraform plan sans compte AWS, exporté dans reports/tfplan.json
+	@echo "plan : non implémenté (docs/etapes/06-terraform.md)"; exit 1
 
 .PHONY: tf-lock
-tf-lock: ## Régénère .terraform.lock.hcl (à lancer après un changement de version de provider)
-	$(Q)for dir in $(TF_ENV) terraform/bootstrap; do \
-	  $(TERRAFORM) -e TF_DATA_DIR=/cache/terraform/data-$$(basename $$dir) --entrypoint sh $(TERRAFORM_IMAGE) -c \
-	    "cd $$dir && terraform init -backend=false -input=false >/dev/null && \
-	     terraform providers lock -platform=linux_amd64 -platform=linux_arm64" || exit 1; \
-	done
+tf-lock: ## [À FAIRE] Régénère .terraform.lock.hcl (à lancer après un changement de version de provider)
+	@echo "tf-lock : non implémenté (docs/etapes/06-terraform.md)"; exit 1
 
 # ----------------------------------------------------------------------------
 # Étape 7 : scan IaC et policies maison
 # ----------------------------------------------------------------------------
 .PHONY: iac-trivy
-iac-trivy: | $(REPORTS) ## Mauvaises configurations Terraform et Dockerfile (Trivy config)
-	$(Q)$(TRIVY) config --skip-dirs .cache --skip-dirs $(REPORTS) --ignorefile .trivyignore.yaml \
-	  --severity $(TRIVY_SEVERITY) --format sarif --output $(REPORTS)/trivy-config.sarif .
-	$(Q)$(TRIVY) config --skip-dirs .cache --skip-dirs $(REPORTS) --ignorefile .trivyignore.yaml \
-	  --severity $(TRIVY_SEVERITY) --exit-code 1 .
+iac-trivy: ## [À FAIRE] Mauvaises configurations Terraform et Dockerfile (Trivy config)
+	@echo "iac-trivy : non implémenté (docs/etapes/07-iac-policies.md)"; exit 1
 
 .PHONY: iac-checkov
-iac-checkov: | $(REPORTS) ## Mauvaises configurations Terraform et Dockerfile (Checkov)
-	$(Q)$(RUN) $(CHECKOV_IMAGE) --config-file .checkov.yaml \
-	  --output cli --output sarif --output-file-path console,$(REPORTS)/checkov.sarif
+iac-checkov: ## [À FAIRE] Mauvaises configurations Terraform et Dockerfile (Checkov)
+	@echo "iac-checkov : non implémenté (docs/etapes/07-iac-policies.md)"; exit 1
 
 .PHONY: iac
-iac: iac-trivy iac-checkov ## Les deux scanners IaC
+iac: ## [À FAIRE] Les deux scanners IaC
+	@echo "iac : non implémenté (docs/etapes/07-iac-policies.md)"; exit 1
 
 .PHONY: policy-test
-policy-test: ## Tests unitaires des policies Rego (conftest verify)
-	$(Q)$(RUN) $(CONFTEST_IMAGE) verify --policy policies
+policy-test: ## [À FAIRE] Tests unitaires des policies Rego (conftest verify)
+	@echo "policy-test : non implémenté (docs/etapes/07-iac-policies.md)"; exit 1
 
 .PHONY: policy
-policy: plan policy-test ## Applique les policies maison au plan Terraform (Conftest / OPA)
-	$(Q)$(RUN) $(CONFTEST_IMAGE) test $(REPORTS)/tfplan.json --policy policies --all-namespaces --no-color \
-	  | tee $(REPORTS)/policy.txt
+policy: ## [À FAIRE] Applique les policies maison au plan Terraform (Conftest / OPA)
+	@echo "policy : non implémenté (docs/etapes/07-iac-policies.md)"; exit 1
 
 # ----------------------------------------------------------------------------
 # Étape 8 : quality gates, exceptions, synthèse et démonstration
 # ----------------------------------------------------------------------------
 .PHONY: exceptions
-exceptions: ## Vérifie que chaque exception est justifiée, datée et non expirée
-	$(Q)scripts/check-exceptions.sh
+exceptions: ## [À FAIRE] Vérifie que chaque exception est justifiée, datée et non expirée
+	@echo "exceptions : non implémenté (docs/etapes/08-quality-gates.md)"; exit 1
 
 .PHONY: scan
-scan: ## Lance tous les quality gates et affiche une synthèse (ne s'arrête pas au premier échec)
-	$(Q)scripts/scan-all.sh
+scan: ## [À FAIRE] Lance tous les quality gates et affiche une synthèse (ne s'arrête pas au premier échec)
+	@echo "scan : non implémenté (docs/etapes/08-quality-gates.md)"; exit 1
 
 .PHONY: summary
-summary: | $(REPORTS) ## Construit reports/summary.md à partir des résultats et des rapports SARIF
-	$(Q)$(RUN) -e NEEDS_JSON -e PYTHONDONTWRITEBYTECODE=1 $(PYTHON_IMAGE) python scripts/summary.py
-
-.PHONY: demo-good
-demo-good: ## Démo : le dépôt sain passe tous les gates
-	$(Q)scripts/demo.sh good
-
-.PHONY: demo-bad
-demo-bad: ## Démo : les failles injectées sont toutes bloquées
-	$(Q)scripts/demo.sh bad
+summary: ## [À FAIRE] Construit reports/summary.md à partir des résultats et des rapports SARIF
+	@echo "summary : non implémenté (docs/etapes/08-quality-gates.md)"; exit 1
 
 # ----------------------------------------------------------------------------
-# Étape 10 : AWS réel. Ces cibles appellent AWS avec les identifiants de l'environnement.
-# Elles sont faites pour les workflows deploy et destroy (identifiants OIDC d'une heure).
+# Étape 10 : AWS réel
 # ----------------------------------------------------------------------------
-TF_AWS := $(TERRAFORM) -e TF_DATA_DIR=/cache/terraform/data-aws \
-  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION -e AWS_DEFAULT_REGION \
-  -e TF_VAR_region -e TF_VAR_app_permissions_boundary_arn -e TF_STATE_BUCKET \
-  --entrypoint sh $(TERRAFORM_IMAGE) -c
-TF_AWS_INIT := cd $(TF_ENV) && terraform init -input=false -reconfigure \
-  -backend-config="bucket=$$TF_STATE_BUCKET" -backend-config="region=$$AWS_REGION" >/dev/null
-
-.PHONY: aws-check
-aws-check:
-	@test -n "$${TF_STATE_BUCKET:-}" || { echo "TF_STATE_BUCKET est vide : fais d'abord le bootstrap (docs/etapes/10-oidc-deploy.md)"; exit 1; }
-	@test -n "$${AWS_REGION:-}" || { echo "AWS_REGION est vide"; exit 1; }
-
 .PHONY: aws-plan
-aws-plan: aws-check | $(REPORTS) ## [AWS] terraform plan contre le vrai compte, en lecture seule
-	$(Q)$(TF_AWS) '{ $(TF_AWS_INIT) && terraform plan -input=false -lock=false -no-color; } > /src/$(REPORTS)/aws-plan.txt 2>&1; \
-	  rc=$$?; cat /src/$(REPORTS)/aws-plan.txt; exit $$rc'
+aws-plan: ## [À FAIRE] [AWS] terraform plan contre le vrai compte, en lecture seule
+	@echo "aws-plan : non implémenté (docs/etapes/10-oidc-deploy.md)"; exit 1
 
 .PHONY: aws-apply
-aws-apply: aws-check ## [AWS] terraform apply (exige AWS_CONFIRM=oui)
-	@test "$${AWS_CONFIRM:-}" = "oui" || { echo "Refusé : relance avec AWS_CONFIRM=oui pour modifier le compte AWS."; exit 1; }
-	$(Q)$(TF_AWS) '$(TF_AWS_INIT) && terraform apply -input=false -auto-approve -lock-timeout=5m'
+aws-apply: ## [À FAIRE] [AWS] terraform apply (exige AWS_CONFIRM=oui)
+	@echo "aws-apply : non implémenté (docs/etapes/10-oidc-deploy.md)"; exit 1
 
 .PHONY: aws-destroy
-aws-destroy: aws-check ## [AWS] terraform destroy de l'environnement dev (exige AWS_CONFIRM=oui)
-	@test "$${AWS_CONFIRM:-}" = "oui" || { echo "Refusé : relance avec AWS_CONFIRM=oui pour détruire l'environnement."; exit 1; }
-	$(Q)$(TF_AWS) '$(TF_AWS_INIT) && terraform destroy -input=false -auto-approve -lock-timeout=5m'
+aws-destroy: ## [À FAIRE] [AWS] terraform destroy de l'environnement dev (exige AWS_CONFIRM=oui)
+	@echo "aws-destroy : non implémenté (docs/etapes/10-oidc-deploy.md)"; exit 1
 
 # ----------------------------------------------------------------------------
 # Étape 11 : SBOM et audit de posture du compte (CSPM)
 # ----------------------------------------------------------------------------
 .PHONY: sbom
-sbom: image-export | $(REPORTS) ## Inventaire des composants de l'image (SBOM CycloneDX)
-	$(Q)$(TRIVY) image --input /cache/image.tar --format cyclonedx --output $(REPORTS)/sbom.cdx.json
-	@echo "SBOM écrit dans $(REPORTS)/sbom.cdx.json"
+sbom: ## [À FAIRE] Inventaire des composants de l'image (SBOM CycloneDX)
+	@echo "sbom : non implémenté (docs/etapes/11-prowler-sbom.md)"; exit 1
 
 .PHONY: sbom-scan
-sbom-scan: ## Recherche de vulnérabilités à partir du SBOM seul, sans l'image
-	$(Q)$(TRIVY) sbom $(REPORTS)/sbom.cdx.json $(TRIVY_GATE)
+sbom-scan: ## [À FAIRE] Recherche de vulnérabilités à partir du SBOM seul, sans l'image
+	@echo "sbom-scan : non implémenté (docs/etapes/11-prowler-sbom.md)"; exit 1
 
 .PHONY: prowler
-prowler: ## [AWS] Audit de posture du compte en lecture seule (Prowler), rapport dans reports/prowler/
-	@test -n "$${AWS_REGION:-}" || { echo "AWS_REGION est vide"; exit 1; }
-	$(Q)mkdir -p $(REPORTS)/prowler && chmod 777 $(REPORTS)/prowler
-	$(Q)docker run --rm $(NET_FLAGS) \
-	  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION -e AWS_DEFAULT_REGION \
-	  -v "$(CURDIR)/$(REPORTS)/prowler":/home/prowler/output $(PROWLER_IMAGE) \
-	  aws --region $$AWS_REGION --severity critical high --status FAIL \
-	  --output-formats html csv json-ocsf --output-directory /home/prowler/output --ignore-exit-code-3
+prowler: ## [À FAIRE] [AWS] Audit de posture du compte en lecture seule (Prowler), rapport dans reports/prowler/
+	@echo "prowler : non implémenté (docs/etapes/11-prowler-sbom.md)"; exit 1
+
+# === Vérifications du parcours (fourni, ne pas modifier) ===
+include checks/checks.mk

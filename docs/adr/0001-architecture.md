@@ -46,4 +46,4 @@ Le plan des PR est calculé **hors ligne** (`skip_credentials_validation`, faux 
 ## Conséquences
 
 - Le lab se rejoue avec `make demo-good` et `make demo-bad`.
-- Tout ce qui dépend de GitHub ou d'AWS (étapes 9 et 10) n'a pas pu être exécuté au moment de l'écriture : voir les [points de contrôle](../reference/checkpoints.md).
+- Tout ce qui dépend de GitHub ou d'AWS (étapes 9 et 10) n'a pas pu être exécuté au moment de l'écriture : voir les pages des étapes 9 et 10.

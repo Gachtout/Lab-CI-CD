@@ -1,4 +1,0 @@
-# Copie ce fichier en terraform.tfvars (ignoré par git) et renseigne tes valeurs.
-# Respecte la casse exacte : la comparaison du jeton OIDC y est sensible.
-github_repository = "Gachtout/Lab-CI-CD"
-budget_email      = "toi@example.org"
