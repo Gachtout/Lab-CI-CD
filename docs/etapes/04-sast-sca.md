@@ -20,78 +20,91 @@ Une application, c'est quelques centaines de lignes à toi et des dizaines de mi
 
 **SCA** : Trivy lit `requirements.txt` et interroge une base de vulnérabilités. Le filtre `--ignore-unfixed` écarte les CVE sans correctif publié : bloquer un développeur sur un problème qu'il ne peut pas résoudre ne sert qu'à lui apprendre à ignorer l'outil.
 
-## Ce qu'on fait
+## Ce qui t'est fourni
 
-- `.semgrep/regles-maison.yml` : deux règles internes (debug Flask en dur, secret de configuration en dur), en plus des jeux communautaires `p/python` et `p/flask`.
-- `make sast` : bloque sur la sévérité `ERROR`.
-- `make sca` : bloque sur `HIGH` et `CRITICAL` ayant un correctif.
-- Jobs `sast` et `sca`, chacun avec publication SARIF.
+- Les images `SEMGREP_IMAGE` et `TRIVY_IMAGE` dans la plomberie.
+- Les cibles `sast` et `sca`, vides.
 
-## Comment vérifier
+## Énoncé
+
+Livrables :
+
+- Des règles Semgrep maison dans `.semgrep/`.
+- Les cibles `make sast` et `make sca`, avec leurs variables de seuil.
+- Les jobs `sast` et `sca` dans `pr-security.yml`.
+
+Contraintes :
+
+1. `make sast` réussit sur le code fourni et échoue sur une injection SQL : les jeux de règles communautaires pour Python et Flask sont utilisés.
+2. Une règle maison bloque un secret de configuration écrit en dur (une clé de `app.config` dont le nom évoque un jeton, un secret, un mot de passe ou une clé, affectée à une chaîne littérale).
+3. Une règle maison bloque l'activation en dur du mode debug de Flask.
+4. Seuls les constats de sévérité `ERROR` font échouer `make sast` ; le seuil est porté par la variable `SEMGREP_SEVERITY`.
+5. `make sca` réussit sur les dépendances fournies et échoue sur des dépendances ayant une vulnérabilité `HIGH` ou `CRITICAL` avec correctif disponible.
+6. Le seuil de `make sca` est piloté par la variable `TRIVY_SEVERITY`, qui vaut `HIGH,CRITICAL` par défaut.
+7. Les rapports SARIF sont écrits dans `reports/semgrep.sarif` et `reports/trivy-sca.sarif`.
+8. Les jobs `sast` et `sca` appellent leur cible. Tout envoi de rapport vers Code Scanning a le droit nécessaire et ne peut pas faire échouer le job.
+
+## Contrat d'interface
+
+Ces noms sont imposés : la vérification en dépend.
+
+| Élément | Valeur imposée |
+|---|---|
+| Règles maison | dossier `.semgrep/` |
+| Cibles `make` | `sast`, `sca` |
+| Variables de seuil | `SEMGREP_SEVERITY`, `TRIVY_SEVERITY` |
+| Périmètre analysé | dossier `app/` |
+| Rapports | `reports/semgrep.sarif`, `reports/trivy-sca.sarif` |
+| Noms des jobs | `sast`, `sca` |
+
+## Critère de réussite
 
 ```bash
-make sast && make sca
+make check-etape-04
 ```
 
-```text
-┌──────────────────┬──────┬─────────────────┐
-│      Target      │ Type │ Vulnerabilities │
-├──────────────────┼──────┼─────────────────┤
-│ requirements.txt │ pip  │        0        │
-└──────────────────┴──────┴─────────────────┘
-```
+Chaque ligne `ECHEC [Cn]` renvoie à la contrainte `n` ci-dessus et donne l'emplacement en cause, jamais la correction. Les journaux détaillés sont dans `reports/checks/`. Teste toujours en local avant de pousser.
 
-`make sast` n'affiche rien quand il n'y a aucun résultat.
+## Indices
+
+Ouvre-les dans l'ordre, et seulement après avoir cherché.
+
+??? tip "Indice 1 : par où commencer"
+    - Semgrep charge des règles depuis un registre public (jeux nommés) et depuis des fichiers locaux ; on peut combiner plusieurs sources.
+    - Trivy a un mode « système de fichiers » qui lit les fichiers de dépendances.
+
+??? tip "Indice 2 : les points qui coincent"
+    - Une règle Semgrep décrit un motif de code avec des métavariables ; une clause peut contraindre une métavariable par expression régulière.
+    - Semgrep ne renvoie un code d'erreur que si on le lui demande, et on peut filtrer par sévérité.
+    - Trivy sait ignorer les vulnérabilités sans correctif et choisir son code de sortie.
+    - Un même scan peut être lancé deux fois : une fois pour le rapport, une fois pour le verdict.
+
+??? tip "Indice 3 : presque la réponse"
+    - Les jeux communautaires utiles ici s'appellent `p/python` et `p/flask`.
+    - Règle « secret en dur » : un motif d'affectation à `$APP.config[$CLE]` d'une chaîne littérale, plus une contrainte sur `$CLE`.
+    - Règle « debug » : deux motifs alternatifs, l'appel de lancement avec l'argument debug et l'affectation de la clé de configuration.
+    - Regroupe les options de seuil de Trivy dans une variable du `Makefile` construite à partir de `TRIVY_SEVERITY` : tu la réutiliseras aux étapes 5 et 11.
+    - Dans le job, l'envoi du rapport demande le droit d'écrire les événements de sécurité, et une option d'étape permet de continuer en cas d'erreur.
 
 ## Casse-le volontairement
 
-### SAST
+Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles d'un corrigé.
 
-Dans `app/app.py`, remets la concaténation SQL de l'étape 2 et ajoute sous la ligne `API_TOKEN` :
+1. Remets la concaténation SQL de l'étape 2 et écris un jeton en dur dans la configuration. Quel outil attrape quoi ? Gitleaks a-t-il vu le jeton ?
+2. Remplace les dépendances par des versions de 2022 de Flask et Werkzeug. Lis la colonne des versions corrigées.
+3. Relance `make sca` en ne gardant que `CRITICAL` comme seuil. Que conclus-tu sur ce qu'est un seuil ?
 
-```python
-app.config["API_TOKEN"] = "jeton-en-dur-a-remplacer"
-app.config["DEBUG"] = True
-```
+## Défends ton choix
 
-```text
-┌─────────────────┐
-│ 3 Code Findings │
-└─────────────────┘
-    app/app.py
-   ❯❯❱ semgrep.interdit-secret-en-dur
-          ❰❰ Blocking ❱❱
-           33┆ app.config["API_TOKEN"] = "jeton-en-dur-a-remplacer"
-   ❯❯❱ semgrep.interdit-flask-debug
-          ❰❰ Blocking ❱❱
-           34┆ app.config["DEBUG"] = True
-   ❯❯❱ python.flask.security.injection.tainted-sql-string.tainted-sql-string
-          ❰❰ Blocking ❱❱
-           45┆ rows = con.execute("SELECT id, name, role FROM users WHERE name = '%s'" % name).fetchall()
-make: *** [Makefile:112: sast] Error 1
-```
+À savoir expliquer à l'oral, sans notes.
 
-Observe que `jeton-en-dur-a-remplacer` n'a pas été vu par Gitleaks à l'étape 3 (ni format, ni entropie). C'est la règle Semgrep maison qui l'attrape, parce qu'elle regarde la **structure** du code, pas la valeur. Les deux outils se complètent.
-
-### SCA
-
-Remplace le contenu de `app/requirements.txt` par :
-
-```text
-flask==2.2.2
-werkzeug==2.2.2
-gunicorn==27.0.0
-```
-
-```text
-Total: 3 (HIGH: 3, CRITICAL: 0)
-│ flask    │ CVE-2023-30861 │ HIGH │ fixed │ 2.2.2 │ 2.3.2, 2.2.5 │
-│ werkzeug │ CVE-2023-25577 │      │       │       │ 2.2.3        │
-│          │ CVE-2024-34069 │      │       │       │ 3.0.3        │
-make: *** [Makefile:118: sca] Error 1
-```
-
-La colonne *Fixed Version* donne la correction. Annule avec `git checkout app/`.
+1. Quelle différence entre SAST et SCA ? Laquelle de leurs corrections coûte le plus ?
+2. Qu'est-ce qu'une analyse de teinte ? Donne la source et le puits de l'injection SQL.
+3. Pourquoi ignorer les vulnérabilités sans correctif disponible ? Quel est le risque de ce choix ?
+4. La SCA dit qu'une bibliothèque est vulnérable. Qu'est-ce qu'elle ne dit pas ?
+5. Pourquoi une règle maison plutôt que d'attendre que l'éditeur l'ajoute ?
+6. Pourquoi l'envoi d'un rapport ne doit-il pas faire échouer un contrôle ?
+7. Un développeur conteste un faux positif du SAST. Comment tranches-tu ?
 
 ## Côté Wiz, en entreprise
 
@@ -102,3 +115,12 @@ La colonne *Fixed Version* donne la correction. Annule avec `git checkout app/`.
 | Seuil `HIGH,CRITICAL` avec correctif | Politique de vulnérabilités : sévérité minimale, « fix available », délai de grâce |
 
 Vérifie la syntaxe exacte de `wizcli` dans la documentation de ton tenant : les sous-commandes ont changé entre versions.
+
+## Corrigé
+
+À ouvrir seulement une fois `make check-etape-04` vert et les questions travaillées : [`etape-04-solution`](https://github.com/Gachtout/Lab-CI-CD/tree/etape-04-solution). La version finale de tout le parcours est sur la branche [`solution`](https://github.com/Gachtout/Lab-CI-CD/tree/solution).
+
+Corrections apportées plus tard à ce corrigé :
+
+- Le corrigé de cette étape envoie les rapports sans `continue-on-error` ni droit `actions: read` : corrigé après la première exécution réelle sur GitHub.
+- Les rapports SARIF du corrigé de cette étape ne sont pas encore filtrés comme le seuil : aligné à l'étape 8.
