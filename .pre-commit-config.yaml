@@ -1,0 +1,14 @@
+# Couche 1 du blocage : sur le poste, avant même que le commit n'existe.
+# Installation : pip install pre-commit && pre-commit install
+# Les hooks appellent le Makefile : mêmes outils et mêmes images que la CI.
+#
+# Limite à connaître : `git commit --no-verify` saute tous ces hooks.
+# C'est un confort pour le développeur, pas une barrière (voir étape 9).
+repos:
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: secrets (gitleaks, fichiers indexés)
+        entry: make secrets-staged
+        language: system
+        pass_filenames: false

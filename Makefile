@@ -40,6 +40,9 @@ RUN := docker run --rm $(NET_FLAGS) --user $(DOCKER_USER) -e HOME=/tmp \
 
 REPORTS := reports
 
+# make V=1 affiche les commandes docker complètes
+Q := $(if $(V),,@)
+
 .PHONY: help
 help: ## Affiche les cibles disponibles
 	@grep -hE '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -56,7 +59,7 @@ clean: ## Supprime les rapports et les caches locaux
 # ----------------------------------------------------------------------------
 .PHONY: lint-workflows
 lint-workflows: | $(REPORTS) ## Vérifie la syntaxe des workflows GitHub Actions (actionlint)
-	$(RUN) $(ACTIONLINT_IMAGE) 2>&1 | tee $(REPORTS)/actionlint.txt
+	$(Q)$(RUN) $(ACTIONLINT_IMAGE) 2>&1 | tee $(REPORTS)/actionlint.txt
 
 # ----------------------------------------------------------------------------
 # Étape 2 : tests et image Docker
@@ -66,11 +69,26 @@ DOCKER_BUILD   ?= docker build $(NET_FLAGS)
 
 .PHONY: test
 test: ## Lance les tests unitaires de l'application (pytest)
-	$(RUN) -w /src/app -e PYTHONDONTWRITEBYTECODE=1 $(PYTHON_IMAGE) sh -c '\
+	$(Q)$(RUN) -w /src/app -e PYTHONDONTWRITEBYTECODE=1 $(PYTHON_IMAGE) sh -c '\
 	  python -m venv /tmp/venv && \
 	  /tmp/venv/bin/pip install --quiet --disable-pip-version-check -r requirements.txt -r requirements-dev.txt && \
 	  /tmp/venv/bin/python -m pytest -q -p no:cacheprovider tests'
 
 .PHONY: build
 build: ## Construit l'image Docker de l'application
-	$(DOCKER_BUILD) -t $(IMAGE) app
+	$(Q)$(DOCKER_BUILD) -t $(IMAGE) app
+
+# ----------------------------------------------------------------------------
+# Étape 3 : secrets
+# ----------------------------------------------------------------------------
+# safe.directory : le dépôt monté n'appartient pas forcément à l'utilisateur du conteneur.
+GITLEAKS := $(RUN) -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/src \
+  $(GITLEAKS_IMAGE) --config .gitleaks.toml --redact --no-banner --verbose
+
+.PHONY: secrets
+secrets: | $(REPORTS) ## Cherche des secrets dans tout l'historique git (Gitleaks) : bloque toujours
+	$(Q)$(GITLEAKS) git --report-format sarif --report-path $(REPORTS)/gitleaks.sarif .
+
+.PHONY: secrets-staged
+secrets-staged: ## Cherche des secrets dans les fichiers indexés (utilisé par le hook pre-commit)
+	$(Q)$(GITLEAKS) git --pre-commit --staged .
