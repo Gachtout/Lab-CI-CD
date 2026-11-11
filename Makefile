@@ -126,3 +126,42 @@ image-scan: $(IMAGE_TAR) | $(REPORTS) ## Scanne l'image (paquets OS, dépendance
 	  --format sarif --output $(REPORTS)/trivy-image.sarif
 	$(Q)$(TRIVY) image --input $(IMAGE_TAR) --scanners vuln,secret --image-config-scanners misconfig,secret \
 	  $(TRIVY_GATE)
+
+# ----------------------------------------------------------------------------
+# Étape 6 : Terraform (fmt, validate, plan sans compte AWS)
+# ----------------------------------------------------------------------------
+TF_ENV := terraform/envs/dev
+# Les providers sont mis en cache hors de l'arbre git ; TF_DATA_DIR évite tout .terraform/ dans le dépôt.
+TERRAFORM := $(RUN) -e TF_IN_AUTOMATION=1 -e TF_PLUGIN_CACHE_DIR=/src/.cache/terraform/plugins \
+  -e TF_DATA_DIR=/src/.cache/terraform/data -e CHECKPOINT_DISABLE=1
+
+.cache/terraform/plugins:
+	@mkdir -p $@
+
+.PHONY: tf-fmt
+tf-fmt: | .cache/terraform/plugins ## Vérifie le formatage Terraform (terraform fmt -check)
+	$(Q)$(TERRAFORM) $(TERRAFORM_IMAGE) fmt -check -recursive -diff terraform
+
+.PHONY: tf-validate
+tf-validate: | .cache/terraform/plugins ## Valide la syntaxe et la cohérence du code Terraform
+	$(Q)$(TERRAFORM) --entrypoint sh $(TERRAFORM_IMAGE) -c '\
+	  cd $(TF_ENV) && terraform init -backend=false -input=false >/dev/null && terraform validate'
+
+# Plan hors ligne : backend local jetable et faux identifiants, dans une copie temporaire.
+# Rien n'est créé, aucun appel AWS n'est émis ; le plan est exporté en JSON pour les policies.
+.PHONY: plan
+plan: | $(REPORTS) .cache/terraform/plugins ## terraform plan sans compte AWS, exporté dans reports/tfplan.json
+	$(Q)$(TERRAFORM) -e TF_VAR_offline=true -e AWS_ACCESS_KEY_ID=offline -e AWS_SECRET_ACCESS_KEY=offline \
+	  -e TF_DATA_DIR=/tmp/tfdata --entrypoint sh $(TERRAFORM_IMAGE) -c '\
+	  cp -r terraform /tmp/tf && cd /tmp/tf/envs/dev && \
+	  printf "terraform {\n  backend \"local\" {}\n}\n" > backend_override.tf && \
+	  terraform init -input=false >/dev/null && \
+	  terraform plan -input=false -lock=false -out=/tmp/tfplan && \
+	  terraform show -json /tmp/tfplan > /src/$(REPORTS)/tfplan.json && \
+	  terraform show -no-color /tmp/tfplan > /src/$(REPORTS)/tfplan.txt'
+
+.PHONY: tf-lock
+tf-lock: | .cache/terraform/plugins ## Régénère .terraform.lock.hcl (à lancer après un changement de version de provider)
+	$(Q)$(TERRAFORM) --entrypoint sh $(TERRAFORM_IMAGE) -c '\
+	  cd $(TF_ENV) && terraform init -backend=false -input=false >/dev/null && \
+	  terraform providers lock -platform=linux_amd64 -platform=linux_arm64'
