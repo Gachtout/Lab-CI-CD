@@ -14,7 +14,7 @@ Tout se rejoue en local avec Docker et `make`, sans compte AWS.
 Prérequis : Docker, `make`, `bash`. Sous Windows : WSL2.
 
 ```bash
-git clone https://github.com/<compte>/devsecops-lab.git && cd devsecops-lab
+git clone https://github.com/Gachtout/Lab-CI-CD.git && cd Lab-CI-CD
 make demo-good   # dépôt sain : 9 contrôles passent
 make demo-bad    # failles injectées : 8 contrôles bloquent
 ```

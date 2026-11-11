@@ -4,41 +4,26 @@ Certaines actions ne peuvent être faites que par toi : créer le dépôt, régl
 
 État au moment de la livraison : **tout ce qui tourne en local a été exécuté** (`make demo-good`, `make demo-bad`, actionlint sur les quatre workflows, `terraform validate`, plans hors ligne). **Rien n'a été exécuté sur GitHub ni sur AWS.**
 
-## Point de contrôle 0 : avant le premier push
+## Point de contrôle 0 : rejouer en local
 
-1. **Reprends la paternité des commits.** Ils portent un auteur provisoire (`yanis@devsecops-lab.invalid`), pour ne pas publier ton adresse sans ton accord.
+Docker, `make`, `bash` ; sous Windows, dans WSL2.
 
-    ```bash
-    git config user.name "Ton nom"
-    git config user.email "ton-adresse-ou-ton-noreply-github"
-    git rebase --root --exec 'git commit --amend --no-edit --reset-author'
-    ```
+```bash
+git clone https://github.com/Gachtout/Lab-CI-CD.git && cd Lab-CI-CD
+make demo-good
+make demo-bad
+```
 
-    L'adresse `noreply` de GitHub se trouve dans *Settings → Emails*.
+Le premier lancement télécharge environ 3,5 Go d'images. Si Docker Hub répond `429`, ajoute `DOCKERHUB=mirror.gcr.io`.
 
-2. **Vérifie en local** (Docker, `make`, `bash` ; sous Windows, dans WSL2) :
+## Point de contrôle 1 : premier pipeline sur GitHub (étape 1)
 
-    ```bash
-    make demo-good
-    make demo-bad
-    ```
+Le dépôt doit être **public** : Code Scanning, le secret scanning avec push protection et les rulesets sont gratuits sur les dépôts publics.
 
-    Le premier lancement télécharge environ 3,5 Go d'images. Si Docker Hub répond `429`, ajoute `DOCKERHUB=mirror.gcr.io`.
+1. Onglet **Actions** : le workflow `pr-security` s'est exécuté sur `main` au moment du push. Attendu : tous les jobs verts, `security-gate` vert. Le workflow `deploy` ne fait rien tant que le bootstrap AWS n'est pas fait.
+2. Onglet **Security → Code scanning** : les catégories `gitleaks`, `semgrep`, `trivy-sca`, `trivy-image`, `trivy-config`, `checkov` apparaissent, sans alerte ouverte.
 
-## Point de contrôle 1 : créer le dépôt (étape 1)
-
-1. Crée un dépôt **public** vide nommé `devsecops-lab`, sans README ni licence. Public, parce que Code Scanning, le secret scanning avec push protection et les rulesets sont gratuits sur les dépôts publics.
-2. Pousse :
-
-    ```bash
-    git remote add origin git@github.com:<ton-compte>/devsecops-lab.git
-    git push -u origin main
-    ```
-
-3. Observe l'onglet **Actions** : le workflow `pr-security` s'exécute sur `main`. Attendu : tous les jobs verts, `security-gate` vert.
-4. Onglet **Security → Code scanning** : les catégories `gitleaks`, `semgrep`, `trivy-sca`, `trivy-image`, `trivy-config`, `checkov` apparaissent, sans alerte ouverte.
-
-Si un job échoue ici, c'est un écart entre mon environnement et les runners GitHub : copie le journal du job, c'est le premier élément à corriger.
+Si un job échoue ici, c'est un écart entre l'environnement de construction du lab et les runners GitHub : le journal du job est le premier élément à corriger.
 
 ## Point de contrôle 2 : protection de branche (étape 9)
 
