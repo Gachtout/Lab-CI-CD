@@ -1,7 +1,17 @@
 # Étape 9 : la protection de branche, la vraie barrière
 
-!!! warning "Non exécuté par l'auteur du lab"
-    Cette étape configure GitHub. Elle n'a pas pu être testée avant la création du dépôt : le JSON et le script sont valides syntaxiquement, pas encore éprouvés. Les sorties attendues ci-dessous sont à confirmer et à capturer au [point de contrôle 2](../reference/checkpoints.md).
+!!! warning "Vérification statique uniquement"
+    `make check-etape-09` lit ton fichier JSON et ton script. Il ne contacte jamais GitHub et **n'exécute pas** ton script.
+
+    | Vérifié par le check | À tester toi-même sur GitHub |
+    |---|---|
+    | Structure du ruleset (cible, contournement, règles, statuts requis) | Le ruleset est accepté par l'API et apparaît dans *Settings → Rules* |
+    | Syntaxe du script, fichier qu'il applique, option de push protection | Le script s'exécute sans erreur, et une seconde exécution ne crée pas de doublon |
+    | — | Un push direct sur `main` est refusé |
+    | — | Une PR aux contrôles rouges ne peut pas être fusionnée, même par un administrateur |
+    | — | La push protection refuse (ou non) un secret d'un format connu |
+
+    Appliquer un ruleset modifie le dépôt : fais-le quand tu es prêt, pas avant d'avoir un pipeline vert sur `main`.
 
 ## Objectif
 
@@ -28,77 +38,86 @@ La couche 2 sans la couche 3 est un voyant sur un tableau de bord : il s'allume,
 
 **La push protection** agit encore plus tôt : GitHub analyse le contenu d'un `git push` et le refuse s'il contient un secret d'un format connu (jeton GitHub, clé AWS…). Elle s'applique à toutes les branches.
 
-## Ce qu'on fait
+## Ce qui t'est fourni
 
-- `.github/rulesets/main.json` : le ruleset, versionné dans le dépôt.
-- `scripts/setup-github.sh` : active le secret scanning et la push protection, crée ou met à jour le ruleset, crée l'environnement `dev` avec approbation manuelle (utilisé à l'étape 10).
+- Rien : tu écris le ruleset et le script de zéro.
 
-```json title=".github/rulesets/main.json (extrait)"
-"bypass_actors": [],
-"rules": [
-  { "type": "deletion" },
-  { "type": "non_fast_forward" },
-  { "type": "pull_request", "parameters": { "required_approving_review_count": 0, … } },
-  { "type": "required_status_checks", "parameters": {
-      "strict_required_status_checks_policy": true,
-      "required_status_checks": [ { "context": "security-gate" }, { "context": "plan" } ] } }
-]
-```
+## Énoncé
 
-Deux réglages à savoir défendre :
+Livrables :
 
-- **`bypass_actors` vide** : aucun rôle n'est exempté. Si l'administrateur peut contourner, la règle protège contre les erreurs, pas contre un compte compromis.
-- **`required_approving_review_count: 0`** : sur un dépôt personnel, on ne peut pas approuver sa propre PR ; exiger une revue bloquerait tout. En équipe, cette valeur passe à 1 ou 2.
+- `.github/rulesets/main.json`.
+- `scripts/setup-github.sh`, exécutable, qui applique la configuration avec `gh`.
 
-## Comment vérifier
+Contraintes :
 
-```bash
-scripts/setup-github.sh
-gh api repos/:owner/:repo/rulesets --jq '.[] | {name, enforcement}'
-```
+1. Le ruleset est actif et vise la branche par défaut.
+2. Personne ne peut le contourner : la liste des acteurs exemptés est vide.
+3. La branche ne peut être ni supprimée, ni réécrite par un push forcé.
+4. Toute modification passe par une pull request.
+5. La fusion exige les statuts `security-gate` et `plan`, sur une branche à jour.
+6. Le script applique le fichier de ruleset versionné et active la protection contre le push de secrets.
+7. Le script est rejouable : relancé, il met à jour le ruleset existant au lieu d'en créer un second.
 
-Puis trois essais, à faire dans l'ordre.
+## Contrat d'interface
 
-### 1. Push direct sur `main`
+Ces noms sont imposés : la vérification en dépend.
 
-```bash
-git switch main
-git commit --allow-empty -m "test: push direct"
-git push origin main
-```
+| Élément | Valeur imposée |
+|---|---|
+| Ruleset | `.github/rulesets/main.json`, au format de l'API REST des rulesets de dépôt |
+| Script | `scripts/setup-github.sh` |
+| Statuts requis | `security-gate`, `plan` (les noms de tes jobs) |
 
-Attendu : refus par le serveur, avec un message de violation de règle du dépôt. Annule le commit local : `git reset --hard origin/main`.
-
-### 2. La PR « bad »
+## Critère de réussite
 
 ```bash
-scripts/demo.sh branch
-git push -u origin demo/bad
-gh pr create --base main --head demo/bad --title "demo: PR vulnérable" --body "Doit être bloquée."
+make check-etape-09
 ```
 
-Attendu : jobs `secrets`, `sast`, `sca`, `image`, `iac`, `build-test` rouges, `security-gate` rouge, `plan` rouge (policies), bouton de fusion désactivé, commentaire de synthèse sur la PR. Ferme la PR sans la fusionner et supprime la branche.
+Chaque ligne `ECHEC [Cn]` renvoie à la contrainte `n` ci-dessus et donne l'emplacement en cause, jamais la correction. Les journaux détaillés sont dans `reports/checks/`. Teste toujours en local avant de pousser.
 
-### 3. La PR « fix »
+## Indices
 
-Une PR avec un changement sain (par exemple une ligne de documentation) : tout est vert, la fusion est possible.
+Ouvre-les dans l'ordre, et seulement après avoir cherché.
+
+??? tip "Indice 1 : par où commencer"
+    - Un ruleset est un objet JSON que l'API REST de GitHub sait créer et mettre à jour. Cherche « repository rulesets » dans la référence de l'API.
+    - `gh api` envoie un fichier comme corps de requête.
+
+??? tip "Indice 2 : les points qui coincent"
+    - Les règles sont une liste d'objets typés ; certaines ont des paramètres.
+    - La branche par défaut se désigne par un mot-clé spécial plutôt que par son nom.
+    - Pour être rejouable, le script doit d'abord chercher un ruleset du même nom.
+    - Le secret scanning et la push protection se règlent sur le dépôt lui-même, pas dans le ruleset.
+
+??? tip "Indice 3 : presque la réponse"
+    - Quatre types de règles suffisent : suppression, avance non rapide, pull request, statuts requis.
+    - Les statuts requis sont une liste de contextes, avec un booléen qui impose une branche à jour.
+    - Sur un dépôt personnel, le nombre d'approbations requises vaut zéro : on ne peut pas approuver sa propre PR.
+    - Création par la méthode POST sur la collection, mise à jour par PUT sur l'identifiant trouvé.
+    - Les réglages de sécurité du dépôt passent par une requête PATCH avec des champs imbriqués `security_and_analysis`.
 
 ## Casse-le volontairement
 
-### Contourner en tant qu'administrateur
+Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles d'un corrigé.
 
-Essaie de fusionner la PR « bad » : `gh pr merge --admin --squash`. Avec `bypass_actors` vide, le refus est attendu. Ajoute ensuite ton rôle dans la liste de contournement depuis l'interface, réessaie, constate que ça passe, puis **retire-le** en relançant `scripts/setup-github.sh`. Tu viens de mesurer ce que vaut une règle avec exemption.
+1. Pousse directement sur `main`. Note le message exact du refus.
+2. Ouvre une PR aux contrôles rouges et tente de la fusionner en administrateur.
+3. Ajoute ton rôle à la liste de contournement, réessaie, puis retire-le en relançant ton script. Qu'as-tu mesuré ?
+4. Ouvre une PR qui baisse un seuil dans le `Makefile`. Elle est verte. Qu'est-ce que cela dit de ce lab ?
 
-### Pousser un vrai format de secret
+## Défends ton choix
 
-Sur une branche de test, commite un fichier contenant une chaîne au format d'un jeton personnel GitHub (préfixe `ghp_` suivi de 36 caractères alphanumériques), puis pousse. Deux issues possibles, toutes deux instructives : la push protection refuse le push, ou elle laisse passer parce que la chaîne ne satisfait pas la validation propre à ce format. Dans le second cas, c'est le job `secrets` qui rattrape. Note ce que tu observes.
+À savoir expliquer à l'oral, sans notes.
 
-### Affaiblir le contrôle depuis une PR
-
-Ouvre une PR qui change `TRIVY_SEVERITY ?= HIGH,CRITICAL` en `CRITICAL` dans le `Makefile`. Elle sera verte. **C'est la limite de ce lab** : les seuils vivent dans le dépôt, donc une PR peut les modifier. Les parades :
-
-- un fichier `CODEOWNERS` qui attribue `Makefile`, `.github/`, `policies/` et les fichiers d'exceptions à l'équipe sécurité, avec `require_code_owner_review` à `true` (demande au moins deux personnes) ;
-- sortir les seuils du dépôt : workflow requis au niveau de l'organisation, ou politique centralisée comme le fait Wiz.
+1. Pourquoi le pipeline seul ne bloque-t-il rien ?
+2. Qui peut contourner chacune des trois couches (hook, CI, ruleset) ?
+3. Pourquoi vider la liste de contournement, y compris pour les administrateurs ?
+4. Pourquoi exiger une branche à jour avant la fusion ?
+5. Que protège la push protection que le pipeline ne protège pas ?
+6. Les seuils vivent dans le dépôt. Cite deux façons de les mettre hors de portée d'une PR.
+7. En arrivant dans une équipe, quelle question poses-tu pour savoir si leur outil de scan bloque réellement quelque chose ?
 
 ## Côté Wiz, en entreprise
 
@@ -112,3 +131,11 @@ Wiz ne remplace pas cette étape. **Wiz produit un verdict ; c'est la plateforme
 | Seuils modifiables par PR | Politiques Wiz dans la console : une PR ne peut pas les baisser |
 
 C'est souvent le point faible d'un déploiement : l'outil est branché partout, mais en mode rapport, sans statut requis. La question à poser en arrivant est « quel statut est exigé, et qui peut le contourner ? ».
+
+## Corrigé
+
+À ouvrir seulement une fois `make check-etape-09` vert et les questions travaillées : [`etape-09-solution`](https://github.com/Gachtout/Lab-CI-CD/tree/etape-09-solution). La version finale de tout le parcours est sur la branche [`solution`](https://github.com/Gachtout/Lab-CI-CD/tree/solution).
+
+Corrections apportées plus tard à ce corrigé :
+
+- Le script du corrigé de cette étape ne crée qu'un environnement `dev` ; l'étape 10 ajoute `dev-plan` et limite les deux à la branche `main`.
