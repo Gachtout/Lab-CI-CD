@@ -142,11 +142,14 @@ ERREUR  terraform/modules/vpc/main.tf:5 : exception sans justification ou sans d
 
 ### Un seuil trop laxiste
 
+Remplace `app/requirements.txt` par les versions vulnérables de l'étape 4, puis compare :
+
 ```bash
-make image-scan TRIVY_SEVERITY=CRITICAL
+make sca                           # bloque : 3 CVE HIGH
+make sca TRIVY_SEVERITY=CRITICAL   # passe : aucune n'est CRITICAL
 ```
 
-Applique d'abord `demo/bad.patch` sur `requirements.txt` seulement, et observe que les trois CVE `HIGH` de Flask et Werkzeug ne bloquent plus `make sca TRIVY_SEVERITY=CRITICAL`. Le seuil est une décision de risque, pas un détail technique.
+Les mêmes dépendances, le même scanner, deux verdicts opposés. Le seuil est une décision de risque, pas un détail technique. Annule avec `git checkout app/`.
 
 ## Côté Wiz, en entreprise
 
