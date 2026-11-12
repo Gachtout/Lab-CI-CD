@@ -1,7 +1,7 @@
 """Petite API Flask servant de cible au lab DevSecOps.
 
 Cette version est la version saine. Les failles de démonstration sont injectées
-à la demande par scripts/demo.sh (voir docs/etapes/08-quality-gates.md).
+par les vérifications d'étape, dans des copies jetables.
 """
 import os
 import sqlite3

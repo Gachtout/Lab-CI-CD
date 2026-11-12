@@ -22,10 +22,3 @@ deny contains "[C2] l'utilisateur d'exécution final est root|USER" if {
 deny contains "[C3] aucun contrôle de santé n'est déclaré|FROM" if {
 	count([i | some i in input; i.Cmd == "healthcheck"]) == 0
 }
-
-deny contains "[C4] une installation pip conserve son cache dans l'image|pip install" if {
-	some i in input
-	i.Cmd == "run"
-	contains(i.Value[0], "pip install")
-	not contains(i.Value[0], "--no-cache-dir")
-}

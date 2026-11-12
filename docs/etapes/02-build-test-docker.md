@@ -77,8 +77,8 @@ Ouvre-les dans l'ordre, et seulement après avoir cherché.
     - La référence d'image s'écrit avec le tag suivi de l'arobase et du digest.
     - Le contrôle de santé peut interroger la route `/health` avec la bibliothèque standard de Python, sans rien installer.
     - `pip` a une option qui désactive son cache.
-    - `make test` : une commande `sh -c` qui crée l'environnement virtuel, installe les deux fichiers de dépendances, puis lance pytest sur `tests`.
-    - `make build` : la variable `DOCKER_BUILD`, l'option de nommage avec `$(IMAGE)`, le dossier `app`.
+    - `make test` : une seule commande shell passée au conteneur, qui crée l'environnement virtuel, installe les deux fichiers de dépendances, puis lance pytest sur `tests`.
+    - `make build` : la variable `DOCKER_BUILD`, l'option de nommage avec la variable d'image, le dossier de l'application.
 
 ## Casse-le volontairement
 

@@ -23,7 +23,7 @@ Jusqu'ici, tout repose sur une hypothèse : le développeur ouvre une PR et atte
 
 | Couche | Où | Qui peut la contourner | Rôle réel |
 |---|---|---|---|
-| 1. Hook pre-commit | Poste du développeur | Le développeur (`--no-verify`, ou ne jamais l'installer) | Retour rapide, confort |
+| 1. Hook pre-commit | Poste du développeur | Le développeur (une option de git saute les hooks, ou il suffit de ne jamais l'installer) | Retour rapide, confort |
 | 2. Pipeline CI | Runner GitHub | Quiconque peut pousser sur `main` sans PR, ou fusionner une PR rouge | Analyse complète, produit un verdict |
 | 3. Ruleset de branche | Serveur GitHub | Personne, si la liste de contournement est vide | **Applique** le verdict |
 
@@ -96,7 +96,7 @@ Ouvre-les dans l'ordre, et seulement après avoir cherché.
     - Les statuts requis sont une liste de contextes, avec un booléen qui impose une branche à jour.
     - Sur un dépôt personnel, le nombre d'approbations requises vaut zéro : on ne peut pas approuver sa propre PR.
     - Création par la méthode POST sur la collection, mise à jour par PUT sur l'identifiant trouvé.
-    - Les réglages de sécurité du dépôt passent par une requête PATCH avec des champs imbriqués `security_and_analysis`.
+    - Les réglages de sécurité du dépôt passent par une requête de modification partielle du dépôt, avec des champs imbriqués.
 
 ## Casse-le volontairement
 

@@ -71,14 +71,14 @@ Ouvre-les dans l'ordre, et seulement après avoir cherché.
     - Une configuration personnalisée remplace les règles par défaut, sauf si on demande explicitement de les étendre.
 
 ??? tip "Indice 2 : les points qui coincent"
-    - Le dépôt monté dans le conteneur n'appartient pas forcément à l'utilisateur du conteneur : git refuse alors de le lire. Cherche `safe.directory`.
+    - Le dépôt monté dans le conteneur n'appartient pas forcément à l'utilisateur du conteneur : git refuse alors de le lire. Lis le message d'erreur, il nomme le réglage en cause.
     - Par défaut, l'action de récupération du code ne ramène que le dernier commit.
     - Un hook `pre-commit` de type local peut lancer n'importe quelle commande du système.
     - Une option de Gitleaks masque la valeur des secrets dans sa sortie.
 
 ??? tip "Indice 3 : presque la réponse"
     - La configuration a une section d'extension avec un booléen, puis un tableau de règles : identifiant, description, expression régulière, mots-clés.
-    - La configuration git peut se passer au conteneur par trois variables d'environnement `GIT_CONFIG_*`.
+    - La configuration git peut se passer au conteneur par des variables d'environnement, sans fichier.
     - Le mode d'analyse de l'historique accepte deux options pour ne regarder que ce qui est indexé avant un commit.
     - Le format et le chemin du rapport sont deux options distinctes de Gitleaks.
     - Dans le job, la profondeur de récupération vaut zéro pour tout l'historique.
@@ -87,7 +87,7 @@ Ouvre-les dans l'ordre, et seulement après avoir cherché.
 
 Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles d'un corrigé.
 
-1. Installe le hook, crée un fichier contenant un jeton au format du lab (assemble-le avec `printf` pour ne pas l'écrire en clair), puis tente un commit. Refais-le avec `--no-verify`.
+1. Installe le hook, crée un fichier contenant un jeton au format du lab (assemble-le avec `printf` pour ne pas l'écrire en clair), puis tente un commit. Refais-le avec l'option de git qui saute les hooks.
 2. Commite le jeton, supprime le fichier dans un second commit, puis relance `make secrets`.
 3. Indexe un fichier contenant la clé d'exemple de la documentation AWS et un mot de passe faible et lisible. Que dit l'outil, et pourquoi ?
 
@@ -119,4 +119,4 @@ Différence de fond : Wiz peut relier un secret trouvé dans le code à la resso
 
 Corrections apportées plus tard à ce corrigé :
 
-- Le corrigé de cette étape publie le rapport dans Code Scanning sans `continue-on-error` : sur un dépôt privé, le job échoue. Corrigé après la première exécution réelle (voir l'étape 4, contrainte 8).
+- Dans le corrigé de cette étape, l'envoi du rapport à Code Scanning peut faire échouer le job : c'est le cas sur un dépôt privé. Corrigé après la première exécution réelle (voir l'étape 4, contrainte 8).

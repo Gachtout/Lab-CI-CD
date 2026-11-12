@@ -18,7 +18,6 @@ __pycache__/
 tfplan*
 *.auto.tfvars
 terraform.tfvars
-backend_override.tf
 crash.log
 
 # Secrets locaux

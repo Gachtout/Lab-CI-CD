@@ -28,7 +28,7 @@ Une ressource créée à la console n'existe pas pour le pipeline. Prowler la vo
 
 ## 6. Analyse statique incomplète
 
-Constat fait pendant la construction du lab ([étape 7](../etapes/07-iac-policies.md)) : ni Trivy ni Checkov n'ont détecté un security group ouvert à `0.0.0.0/0` quand la plage venait d'une variable consommée par un `for_each`. Seule la policy appliquée au plan l'a vu.
+Lire le code n'est pas lire le résultat : un scanner statique doit reconstituer les valeurs que Terraform ne calcule qu'au moment du plan. Tu le constateras toi-même à l'[étape 7](../etapes/07-iac-policies.md).
 
 ## 7. Détection de secrets par format uniquement
 

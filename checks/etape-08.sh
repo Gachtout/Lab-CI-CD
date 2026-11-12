@@ -4,16 +4,12 @@ source "$(dirname "$0")/lib.sh"
 
 structure e08.workflow .github/workflows/pr-security.yml 1 4 5 8 9
 
-# Seuils par défaut, lus dans la commande que make exécuterait (aucun outil n'est lancé).
-if is_stub sca || is_stub sast; then
-  ko 3 "les cibles sca et sast doivent exister pour lire leurs seuils (Makefile)"
-else
-  sca_cmd=$(make -n sca V=1 2>/dev/null || true); sast_cmd=$(make -n sast V=1 2>/dev/null || true)
-  if grep -q -- '--severity HIGH,CRITICAL' <<<"${sca_cmd}" && grep -q -- '--ignore-unfixed' <<<"${sca_cmd}"; then ok 3
-  else ko 3 "seuil par défaut des vulnérabilités différent de celui de l'énoncé ($(loc Makefile 'TRIVY_SEVERITY'))"; fi
-  if grep -q -- '--severity ERROR' <<<"${sast_cmd}"; then ok 3
-  else ko 3 "seuil par défaut du SAST différent de celui de l'énoncé ($(loc Makefile 'SEMGREP_SEVERITY'))"; fi
-fi
+# Seuils par défaut : valeur des deux variables de seuil, lue sans rien exécuter.
+vars=$(make -pn 2>/dev/null | grep -E '^(TRIVY_SEVERITY|SEMGREP_SEVERITY) ' || true)
+if grep -qE '^TRIVY_SEVERITY [?:]?= *HIGH,CRITICAL$' <<<"${vars}"; then ok 3
+else ko 3 "valeur par défaut de TRIVY_SEVERITY différente de celle de l'énoncé ($(loc Makefile 'TRIVY_SEVERITY'))"; fi
+if grep -qE '^SEMGREP_SEVERITY [?:]?= *ERROR$' <<<"${vars}"; then ok 3
+else ko 3 "valeur par défaut de SEMGREP_SEVERITY différente de celle de l'énoncé ($(loc Makefile 'SEMGREP_SEVERITY'))"; fi
 stage
 
 d0=$(sandbox)

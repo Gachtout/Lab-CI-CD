@@ -47,6 +47,7 @@ Ces noms sont imposés : la vérification en dépend.
 | Élément | Valeur imposée |
 |---|---|
 | Cibles `make` | `exceptions`, `scan`, `summary` |
+| Fichier d'exceptions de Trivy | `.trivyignore.yaml`, à la racine |
 | Variable d'entrée du verdict | `NEEDS_JSON` (le contexte `needs` du job, en JSON) |
 | Rapports | `reports/gates.json`, `reports/summary.md` |
 | Noms des jobs | `exceptions`, `security-gate` |
@@ -119,4 +120,4 @@ Différence d'organisation importante : avec Wiz, c'est l'équipe sécurité qui
 
 Corrections apportées plus tard à ce corrigé :
 
-- Le corrigé contient aussi une démonstration (`make demo-good`, `make demo-bad`) et un job `gates-selftest` : ils ne font pas partie de l'exercice, `make check-etape-XX` joue ce rôle.
+- Le corrigé contient aussi une démonstration rouge / vert et un job d'auto-test des contrôles : ils ne font pas partie de l'exercice, `make check-etape-XX` joue ce rôle.

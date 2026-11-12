@@ -12,7 +12,7 @@ Un scanner d'image ouvre chaque couche, dresse l'inventaire des paquets (base `d
 
 Deux points contre-intuitifs :
 
-- **Épingler par digest fige aussi les failles.** L'image de base ne bouge plus, donc ses CVE non plus. Il faut appliquer les correctifs au build (`apt-get upgrade`) et monter régulièrement le digest.
+- **Épingler par digest fige aussi les failles.** L'image de base ne bouge plus, donc ses CVE non plus. Il faut appliquer les correctifs au build et monter régulièrement le digest.
 - **Un outil d'installation est une dépendance.** `pip` embarque ses propres bibliothèques. Il ne sert plus une fois l'application installée : le retirer supprime ses CVE.
 
 ## Ce qui t'est fourni
@@ -73,7 +73,7 @@ Ouvre-les dans l'ordre, et seulement après avoir cherché.
     - Exporte l'image dans le dossier de cache, puis donne ce fichier à Trivy par son option d'entrée.
     - Les paquets du système se mettent à jour au build ; pense à nettoyer les listes du gestionnaire de paquets dans la même couche.
     - L'outil d'installation Python n'est plus utile une fois les dépendances installées.
-    - L'option qui active l'analyse de la configuration de l'image s'appelle `--image-config-scanners`.
+    - L'analyse de la configuration de l'image s'active par une option distincte de celle qui choisit les scanners de contenu.
 
 ## Casse-le volontairement
 

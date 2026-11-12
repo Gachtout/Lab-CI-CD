@@ -88,25 +88,11 @@ Dans ton dépôt, travaille sur des branches et ouvre des pull requests vers `ma
 Deux conséquences de cette séparation :
 
 - les liens « Corrigé » des pages pointent vers `Gachtout/Lab-CI-CD` ;
-- `make test-checks` n'y fonctionne pas : il a besoin de la branche `solution`. C'est un outil de mainteneur, pas d'apprenant.
+- le banc de test des vérifications n'est pas copié : il reste sur la branche `banc` de `Gachtout/Lab-CI-CD`.
 
 ## Pour qui maintient ce dépôt
 
-`make test-checks` éprouve les vérifications elles-mêmes, à partir de la branche `solution` :
-
-- chaque vérification **passe** sur le corrigé et **échoue** sur le squelette ;
-- chaque vérification **échoue** sur chacun de ses mutants (`checks/mutants/`), un mutant retirant une seule contrainte du corrigé, et l'échec cite la bonne contrainte ;
-- progression : avec les étapes 1 à N résolues, la vérification N passe et la N+1 échoue ;
-- cohérence : chaque contrainte numérotée d'une page a un contrôle et un mutant (`reports/correspondance.md`) ;
-- fuite : aucune ligne du corrigé ne figure sur cette branche.
-
-```bash
-git fetch origin solution
-make test-checks                       # tout, compter 45 à 60 minutes
-make test-checks STEPS="03" PARTS=mutants
-```
-
-Les mutants sont des transformations appliquées à la volée au corrigé (`checks/tools/mut.py`), jamais des fichiers complets.
+Le banc qui éprouve les vérifications (mutants du corrigé, progression, recherche de fuite) n'est pas sur cette branche : il décrit le corrigé. Il vit sur la branche [`banc`](https://github.com/Gachtout/Lab-CI-CD/tree/banc), avec son mode d'emploi.
 
 ## Branches du dépôt
 
@@ -115,6 +101,7 @@ Les mutants sont des transformations appliquées à la volée au corrigé (`chec
 | `main` | Le lab en mode démonstration (produit fini) |
 | `exercices` | Ce squelette |
 | `solution` | Le corrigé complet |
+| `banc` | Le banc de test des vérifications (mainteneur) |
 | `etape-01-solution` … `etape-11-solution` | L'état du corrigé à la fin de chaque étape |
 
 ## Licence

@@ -13,16 +13,16 @@ Décrire une infrastructure AWS en code et obtenir, sur chaque pull request, la 
 | Élément | Rôle |
 |---|---|
 | Le **code** (`*.tf`) | Ce que tu veux |
-| L'**état** (`terraform.tfstate`) | Ce que Terraform croit avoir créé |
+| L'**état** | Ce que Terraform croit avoir créé |
 | La **réalité** (les API AWS) | Ce qui existe vraiment |
 
 `terraform plan` calcule la différence et l'affiche ; `terraform apply` l'exécute. Le plan est l'objet central pour la sécurité : c'est une **prédiction lisible par une machine** de chaque changement. On peut donc le contrôler avant qu'il ne se produise (étape 7).
 
 **Trois contrôles, du moins cher au plus riche :**
 
-1. `terraform fmt -check` : le code est-il formaté de façon standard ? Aucun appel réseau.
-2. `terraform validate` : les références et les types sont-ils cohérents ? Charge les providers, n'appelle pas AWS.
-3. `terraform plan` : que va-t-il se passer ? Normalement, interroge AWS.
+1. La vérification de format : le code est-il formaté de façon standard ? Aucun appel réseau.
+2. La validation : les références et les types sont-ils cohérents ? Charge les providers, n'appelle pas AWS.
+3. Le plan : que va-t-il se passer ? Normalement, interroge AWS.
 
 **Un plan sans AWS.** Quand il n'existe encore aucune ressource et aucune source de données distante, le plan n'a rien à lire chez AWS. Avec trois options `skip_*` du provider et de faux identifiants, il se calcule donc hors ligne. Deux intérêts : le lab se rejoue sans compte, et une PR venant d'un fork peut être planifiée sans qu'on lui confie le moindre identifiant.
 
@@ -86,7 +86,7 @@ Ouvre-les dans l'ordre, et seulement après avoir cherché.
     - Les tags communs se déclarent une fois, au niveau du provider.
 
 ??? tip "Indice 3 : presque la réponse"
-    - Trois options `skip_*` du provider, de faux identifiants passés au conteneur par l'environnement, et un backend local écrit dans un fichier de surcharge.
+    - Trois options du provider qui sautent ses vérifications, de faux identifiants passés au conteneur par l'environnement, et un backend local écrit dans un fichier de surcharge.
     - Après le plan : une commande l'exporte en JSON, la même sans option JSON l'exporte en texte.
     - Le verrou natif du backend S3 est un booléen ; il existe depuis Terraform 1.10.
     - Le fichier de verrouillage se génère pour plusieurs plateformes avec la sous-commande des providers.

@@ -47,8 +47,3 @@ nav:
   - Référence:
       - "Correspondance Wiz": reference/mapping-wiz.md
       - "Limites face à Wiz": reference/limites.md
-  - Après le parcours:
-      - "Audit du lab d'origine": 00-audit.md
-      - "ADR 0001 Architecture": adr/0001-architecture.md
-      - "ADR 0002 Outils": adr/0002-outils.md
-      - "ADR 0003 Seuils et exceptions": adr/0003-gates-et-exceptions.md

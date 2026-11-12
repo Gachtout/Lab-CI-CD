@@ -15,13 +15,7 @@ check-tout: ## Vérifie toutes les étapes dans l'ordre, s'arrête à la premiè
 	  echo "== Étape $$n"; ETAPE=$$n bash checks/etape-$$n.sh || exit 1; \
 	done
 
-.PHONY: test-checks
-test-checks: ## [Mainteneur] Éprouve les vérifications : corrigé, squelette, mutants, progression
-	@bash checks/tools/test-checks.sh
-
-# Terraform hors ligne pour les vérifications : faux identifiants, aucune action possible sur un compte réel.
-.PHONY: __terraform
-__terraform:
-	@$(RUN) -e TF_IN_AUTOMATION=1 -e CHECKPOINT_DISABLE=1 -e TF_PLUGIN_CACHE_DIR=/cache/terraform/plugins \
-	  -e TF_DATA_DIR=/tmp/tfdata -e AWS_ACCESS_KEY_ID=offline -e AWS_SECRET_ACCESS_KEY=offline \
-	  --entrypoint sh $(TERRAFORM_IMAGE) -c '$(A)'
+# Lance une image d'outil de la plomberie avec des options données (usage interne des vérifications).
+.PHONY: __tool
+__tool:
+	@$(RUN) $(O) $($(IMG)) $(A)

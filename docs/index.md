@@ -31,4 +31,4 @@ Tu construis une chaîne CI/CD **GitHub Actions + Terraform (AWS free tier)** qu
 
 - [Correspondance Wiz ↔ outils gratuits](reference/mapping-wiz.md)
 - [Limites de ces outils face à Wiz](reference/limites.md)
-- [Décisions d'architecture du corrigé](adr/0001-architecture.md) : à lire après le parcours, elles en dévoilent la conception.
+- Les décisions d'architecture du corrigé sont sur la branche `solution` (`docs/adr/`) : à lire après le parcours.

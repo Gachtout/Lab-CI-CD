@@ -33,7 +33,8 @@ stage
 
 d0=$(sandbox); mkdir -p "${d0}/reports/checks"
 plan_cmd='cp -r terraform /tmp/tf && cd /tmp/tf/bootstrap && terraform init -input=false >/dev/null && terraform plan -input=false -out=/tmp/p -var offline=true -var github_repository=exemple/depot -var budget_email=test@example.org >/dev/null && terraform show -json /tmp/p > /src/reports/checks/bootstrap-plan.json'
-if mk "${d0}" __terraform A="${plan_cmd}" >"${LOGDIR}/etape-10-plan.log" 2>&1 && [ -s "${d0}/reports/checks/bootstrap-plan.json" ]; then
+tf_opts='-e TF_IN_AUTOMATION=1 -e CHECKPOINT_DISABLE=1 -e TF_PLUGIN_CACHE_DIR=/cache/terraform/plugins -e TF_DATA_DIR=/tmp/tfdata -e AWS_ACCESS_KEY_ID=offline -e AWS_SECRET_ACCESS_KEY=offline --entrypoint sh'
+if mk "${d0}" __tool IMG=TERRAFORM_IMAGE O="${tf_opts}" A="-c '${plan_cmd}'" >"${LOGDIR}/etape-10-plan.log" 2>&1 && [ -s "${d0}/reports/checks/bootstrap-plan.json" ]; then
   cp "${d0}/reports/checks/bootstrap-plan.json" "${LOGDIR}/bootstrap-plan.json"
   structure e10.plan reports/checks/bootstrap-plan.json 1 3 4 5
 else

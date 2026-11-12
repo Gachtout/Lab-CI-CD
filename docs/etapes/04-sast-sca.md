@@ -18,7 +18,7 @@ Une application, c'est quelques centaines de lignes à toi et des dizaines de mi
 
 **SAST** : Semgrep cherche des *motifs*. Pour l'injection SQL, il suit la donnée : `request.args` (source contrôlée par l'utilisateur) rejoint une chaîne SQL construite à la main (puits). C'est une analyse de teinte.
 
-**SCA** : Trivy lit `requirements.txt` et interroge une base de vulnérabilités. Le filtre `--ignore-unfixed` écarte les CVE sans correctif publié : bloquer un développeur sur un problème qu'il ne peut pas résoudre ne sert qu'à lui apprendre à ignorer l'outil.
+**SCA** : Trivy lit `requirements.txt` et interroge une base de vulnérabilités. Un filtre écarte les CVE sans correctif publié : bloquer un développeur sur un problème qu'il ne peut pas résoudre ne sert qu'à lui apprendre à ignorer l'outil.
 
 ## Ce qui t'est fourni
 
@@ -80,8 +80,8 @@ Ouvre-les dans l'ordre, et seulement après avoir cherché.
     - Un même scan peut être lancé deux fois : une fois pour le rapport, une fois pour le verdict.
 
 ??? tip "Indice 3 : presque la réponse"
-    - Les jeux communautaires utiles ici s'appellent `p/python` et `p/flask`.
-    - Règle « secret en dur » : un motif d'affectation à `$APP.config[$CLE]` d'une chaîne littérale, plus une contrainte sur `$CLE`.
+    - Le registre public a un jeu de règles pour le langage et un autre pour le framework de l'application.
+    - Règle « secret en dur » : un motif d'affectation d'une chaîne littérale à une clé de la configuration, la clé étant une métavariable contrainte par une expression régulière.
     - Règle « debug » : deux motifs alternatifs, l'appel de lancement avec l'argument debug et l'affectation de la clé de configuration.
     - Regroupe les options de seuil de Trivy dans une variable du `Makefile` construite à partir de `TRIVY_SEVERITY` : tu la réutiliseras aux étapes 5 et 11.
     - Dans le job, l'envoi du rapport demande le droit d'écrire les événements de sécurité, et une option d'étape permet de continuer en cas d'erreur.
@@ -122,5 +122,5 @@ Vérifie la syntaxe exacte de `wizcli` dans la documentation de ton tenant : les
 
 Corrections apportées plus tard à ce corrigé :
 
-- Le corrigé de cette étape envoie les rapports sans `continue-on-error` ni droit `actions: read` : corrigé après la première exécution réelle sur GitHub.
+- Dans le corrigé de cette étape, l'envoi des rapports peut faire échouer le job et il lui manque un droit de lecture : corrigé après la première exécution réelle sur GitHub.
 - Les rapports SARIF du corrigé de cette étape ne sont pas encore filtrés comme le seuil : aligné à l'étape 8.

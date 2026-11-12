@@ -13,14 +13,14 @@ Refuser une infrastructure dangereuse **avant** qu'elle n'existe, avec deux scan
 | Entrée | Les fichiers `*.tf` | `tfplan.json`, produit par `terraform plan` |
 | Outils ici | Trivy config, Checkov | Conftest (moteur OPA, langage Rego) |
 | Avantage | Immédiate, aucun `init`, pointe la ligne fautive | Voit les **valeurs finales**, après variables, boucles et modules |
-| Limite | Doit deviner la valeur des variables et des `for_each` | Demande un plan, donc un `init` et des providers |
+| Limite | Doit deviner la valeur des variables et des boucles | Demande un plan, donc un `init` et des providers |
 
 **Pourquoi des règles maison ?** Les scanners embarquent des centaines de règles génériques (« un bucket ne doit pas être public »). Ils ne connaissent pas *tes* règles : tags obligatoires, types de ressources interdits, régions autorisées. Une policy-as-code est une règle interne écrite dans un langage exécutable, versionnée et testée comme du code.
 
 **Rego en trois idées :**
 
 - Une règle `deny contains msg if { … }` ajoute un message à l'ensemble `deny` quand **toutes** les lignes du bloc sont vraies.
-- `some rc in input.resource_changes` parcourt le plan.
+- Une itération parcourt la liste des changements du plan.
 - Piège classique : un attribut absent vaut `null` dans le plan, et `not x` est faux quand `x` vaut `null`. On compare donc explicitement : `x != true`.
 
 ## Ce qui t'est fourni
@@ -76,7 +76,7 @@ Ouvre-les dans l'ordre, et seulement après avoir cherché.
 
 ??? tip "Indice 1 : par où commencer"
     - Deux familles d'outils : ceux qui lisent le code, ceux qui lisent le plan. Demande-toi ce que chacun peut voir.
-    - Ouvre `checks/fixtures/plan-sain.json` : une policy sur le plan parcourt la liste `resource_changes`.
+    - Ouvre `checks/fixtures/plan-sain.json` : une policy sur le plan parcourt la liste des changements de ressources.
 
 ??? tip "Indice 2 : les points qui coincent"
     - En Rego, une règle `deny` ajoute un message quand toutes ses lignes sont vraies.
@@ -87,7 +87,7 @@ Ouvre-les dans l'ordre, et seulement après avoir cherché.
 
 ??? tip "Indice 3 : presque la réponse"
     - Factorise dans un paquet commun l'ensemble des ressources créées ou modifiées, puis écris une policy par sujet.
-    - Tags : la différence entre l'ensemble des tags obligatoires et l'ensemble des clés de `tags_all`.
+    - Tags : la différence entre l'ensemble des tags obligatoires et l'ensemble des clés de tags effectives de la ressource.
     - Réseau : il existe trois façons de déclarer une règle d'entrée dans le provider AWS ; les plans de référence utilisent la plus récente.
     - Coût : une table associant un type de ressource à la raison de son interdiction.
     - Checkov se configure par un fichier à la racine ; Trivy accepte un fichier d'exceptions avec une date d'expiration par entrée.

@@ -52,12 +52,12 @@ L'erreur classique est d'écrire `StringLike` avec `repo:mon-org/*` : n'importe 
 
 | Environnement GitHub | Rôle AWS | Droits | Approbation |
 |---|---|---|---|
-| `dev-plan` | `devsecops-lab-gha-plan` | Lecture seule | Aucune |
+| environnement de plan | `devsecops-lab-gha-plan` | Lecture seule | Aucune |
 | `dev` | `devsecops-lab-gha-deploy` | Créer et supprimer les ressources du lab | **Manuelle** |
 
 Les deux environnements n'acceptent que la branche `main`. Une PR n'obtient donc jamais d'identifiants AWS : son plan reste celui, hors ligne, de l'étape 6.
 
-**L'état distant.** L'état Terraform contient la description complète de l'infrastructure. Il vit dans un bucket S3 privé, chiffré et versionné. Le verrou est un fichier `.tflock` dans ce bucket (`use_lockfile`), ce qui évite la table DynamoDB des anciennes configurations.
+**L'état distant.** L'état Terraform contient la description complète de l'infrastructure. Il vit dans un bucket S3 privé, chiffré et versionné. Le verrou est un fichier dans ce même bucket, ce qui évite la table DynamoDB des anciennes configurations.
 
 ## Ce qui t'est fourni
 
@@ -95,6 +95,7 @@ Ces noms sont imposés : la vérification en dépend.
 | Workflows | `.github/workflows/deploy.yml`, `.github/workflows/destroy.yml` |
 | Cibles `make` | `aws-plan`, `aws-apply`, `aws-destroy` |
 | Confirmation locale | variable d'environnement `AWS_CONFIRM` |
+| Entrées des cibles `aws-*` | variables d'environnement `AWS_REGION` et `TF_STATE_BUCKET` |
 | Configuration du dépôt | des *variables* GitHub (pas des secrets) pour la région, le bucket d'état et les ARN des rôles |
 
 ## Critère de réussite

@@ -12,14 +12,14 @@ GitHub Actions le fait avec quatre notions.
 
 | Notion | Ce que c'est réellement |
 |---|---|
-| **Event** | Un fait qui se produit dans le dépôt (`pull_request`, `push`…). GitHub lit alors les fichiers de `.github/workflows/` et lance ceux dont le bloc `on:` correspond |
+| **Event** | Un fait qui se produit dans le dépôt (ouverture d'une pull request, push…). GitHub lit alors les fichiers de `.github/workflows/` et lance ceux dont le bloc `on:` correspond |
 | **Runner** | Une machine virtuelle neuve, créée pour le job et détruite après. Rien ne survit d'un job à l'autre |
 | **Job** | Une suite d'étapes exécutées sur un même runner. Deux jobs tournent sur deux machines différentes, en parallèle par défaut |
 | **Artifact** | Un fichier qu'on demande explicitement à GitHub de conserver, puisque le runner est détruit |
 
 Deux conséquences pratiques :
 
-- Le runner part d'un disque vide : il faut d'abord récupérer le code (`actions/checkout`).
+- Le runner part d'un disque vide : il faut d'abord récupérer le code, ce qu'une action dédiée fait.
 - Le code de sortie de chaque commande décide de tout. `0` : l'étape est verte. Autre chose : l'étape, puis le job, sont rouges. **Tous les blocages de ce lab reposent sur ce mécanisme.**
 
 ## Ce qui t'est fourni
@@ -101,7 +101,7 @@ Note ce que tu observes dans `docs/journal.md` : ce sont tes sorties, pas celles
 1. Pourquoi épingler une action par SHA plutôt que par numéro de version ? Cite un incident réel où un tag a été déplacé.
 2. Sans la ligne qui vide les droits, que peut faire le jeton par défaut, et qu'en ferait une action compromise ?
 3. Deux jobs partagent-ils leur système de fichiers ? Comment un fichier passe-t-il de l'un à l'autre ?
-4. Quelle différence de risque entre les déclencheurs `pull_request` et `pull_request_target` ?
+4. Quelle différence de risque entre le déclencheur des pull requests et sa variante « target » ?
 5. Pourquoi appeler `make` plutôt qu'une action du marketplace qui ferait le lint ? Donne un avantage et un inconvénient.
 6. Que se passe-t-il, côté sécurité, si un contributeur externe ouvre une PR qui modifie ce workflow ?
 7. Pourquoi un tube peut-il rendre vert un contrôle qui a échoué ?
